@@ -1,0 +1,43 @@
+# --- Environnement virtuel ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Cache Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Packaging / distribution ---
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Jupyter / notebooks ---
+.ipynb_checkpoints/
+
+# --- Données téléchargées (NE PAS versionner) ---
+# Les prix EPEX SPOT sont propriété d'EPEX SPOT SE (usage non commercial) :
+# on ne commite pas les données brutes récupérées via l'API.
+data/
+cache/
+*.csv
+*.tsv
+*.parquet
+
+# --- Figures générées (décommenter si tu ne veux pas les versionner) ---
+# *.png
+
+# --- IDE / éditeurs ---
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Système ---
+.DS_Store
+Thumbs.db
+desktop.ini

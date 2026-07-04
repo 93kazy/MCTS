@@ -1,0 +1,10 @@
+# Dépendances du projet (Python >= 3.9)
+# Le reste (urllib, json, datetime, math...) est dans la bibliothèque standard.
+numpy>=1.24
+matplotlib>=3.5
+
+# --- Optionnel : source de prix "officielle" ENTSO-E ---
+# Nécessite un token gratuit (transparency.entsoe.eu + mail à transparency@entsoe.eu).
+# Décommenter si tu utilises cette voie au lieu de energy-charts.info.
+# entsoe-py>=0.6
+# pandas>=1.5
