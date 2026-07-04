@@ -1,28 +1,36 @@
-"""Phase 4 — Strategies de reference.
+"""Strategies de reference (deterministe).
 
 Deux familles :
   1. Heuristiques simples (tout vendre, seuil de prix, glouton myope, aleatoire).
   2. Borne optimale par programmation dynamique (PD) sous prevision parfaite :
-     c'est le PLAFOND theorique du profit en deterministe. Le MCTS sera evalue
+     c'est le PLAFOND theorique du profit en deterministe. Le MCTS est evalue
      en pourcentage de cette borne.
 
 Toutes les strategies renvoient une politique `(t, soc) -> action_index`, jouee
 ensuite sur le meme environnement -> comparaison strictement equitable (meme
-grille d'actions, meme dynamique).
+espace d'actions, meme dynamique). Elles fonctionnent dans les deux modes
+d'action ("grid" et "simple3").
 """
 
 import numpy as np
+
+from .environment import A_SELL, A_STORE
 
 
 # ---------------------------------------------------------------------- #
 # Heuristiques                                                            #
 # ---------------------------------------------------------------------- #
 def policy_always_sell(env):
-    """Tout vendre immediatement : n'utilise jamais le stockage (action u=0)."""
-    idx_zero = int(np.argmin(np.abs(env.actions)))
+    """Tout vendre immediatement : n'utilise jamais le stockage.
+    (grid : u=0 — la repartition vente/conso instantanee reste optimale ;
+    simple3 : action VENDRE.)"""
+    if env.action_mode == "simple3":
+        idx = A_SELL
+    else:
+        idx = int(np.argmin(np.abs(env.actions)))
 
     def policy(t, soc):
-        return idx_zero
+        return idx
     return policy
 
 
@@ -32,19 +40,22 @@ def policy_threshold(env, threshold=None):
     Seuil par defaut = mediane des prix observes."""
     if threshold is None:
         threshold = float(np.median(env.prices))
-    idx_max_discharge = 0                       # u le plus negatif
-    idx_max_charge = env.n_actions - 1          # u le plus positif
+    if env.action_mode == "simple3":
+        idx_sell, idx_store = A_SELL, A_STORE
+    else:
+        idx_sell = 0                        # u le plus negatif (decharge max)
+        idx_store = env.n_actions - 1       # u le plus positif (charge max)
 
     def policy(t, soc):
-        return idx_max_discharge if env.prices[t] >= threshold else idx_max_charge
+        return idx_sell if env.prices[t] >= threshold else idx_store
     return policy
 
 
 def policy_greedy_myopic(env):
     """Glouton myope : a chaque pas, action qui maximise la recompense immediate.
-    Ignore la valeur future du stockage -> ne stocke jamais (vendre rapporte
-    tout de suite, stocker rapporte 0 sur l'instant). Sert a illustrer le cout
-    de la myopie."""
+    Ignore la valeur future du stockage -> ne stocke jamais (vendre ou consommer
+    rapporte tout de suite, stocker rapporte 0 sur l'instant). Sert a illustrer
+    le cout de la myopie."""
     def policy(t, soc):
         rewards = [env.apply(soc, t, a)[1] for a in range(env.n_actions)]
         return int(np.argmax(rewards))
@@ -71,10 +82,9 @@ def dp_optimal(env, n_soc=201):
       - une politique greedy-vs-V jouable sur l'environnement,
       - V0 = valeur optimale theorique depuis (t=0, soc0).
 
-    Complexite : O(H * n_soc * n_actions). Donne la borne superieure servant de
-    reference au MCTS. (Alternative possible : formulation en programmation
-    lineaire, qui donne l'optimum continu ; la PD est ici auto-suffisante et
-    epouse exactement le MDP que le MCTS resout.)
+    Complexite : O(H * n_soc * n_actions). Valide dans les deux modes d'action
+    (l'etat (t, soc) reste suffisant : la repartition vente/conso est
+    instantanee et n'introduit pas de variable d'etat supplementaire).
     """
     H = env.H
     soc_grid = np.linspace(0.0, env.capacity, n_soc)

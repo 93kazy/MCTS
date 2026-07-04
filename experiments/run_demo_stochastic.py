@@ -11,17 +11,23 @@ re-optimisation deterministe sur la prevision moyenne (equivalent-certain) est
 ici une base tres forte. L'interet propre du MCTS est sa GENERALITE : il se passe
 de la matrice de transition et passe a l'echelle quand l'etat de prix s'enrichit.
 
-Lancement :  python run_demo_stochastic.py [n_eval] [n_sim_mcts]
+Lancement :  python experiments/run_demo_stochastic.py [n_eval] [n_sim_mcts]
 """
 
 import sys
 import time
+from pathlib import Path
+
 import numpy as np
 
-from environment import EnergyStorageEnv
-from price_model import MarkovPriceModel, make_seasonal_profiles
-from stochastic import solve_sdp, make_ce_mpc_policy, clairvoyant_value
-from mcts_stochastic import StochasticMCTSPlanner, stochastic_threshold_policy
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+FIGDIR = ROOT / "figures"
+
+from core.environment import EnergyStorageEnv
+from core.price_model import MarkovPriceModel, make_seasonal_profiles
+from core.stochastic import solve_sdp, make_ce_mpc_policy, clairvoyant_value
+from core.mcts_stochastic import StochasticMCTSPlanner, stochastic_threshold_policy
 
 
 def rollout_causal(env, model, policy, state_path, return_soc=False):
@@ -31,8 +37,9 @@ def rollout_causal(env, model, policy, state_path, return_soc=False):
     for t in range(env.H):
         s = int(state_path[t])
         a = policy(t, soc, s)
-        soc, sold = env.dispatch(soc, t, a)
-        total += sold * model.price(s, t)
+        soc_n, out, forced = env.transition(soc, t, a)
+        total += env.revenue(out, forced, t, model.price(s, t))
+        soc = soc_n
         soc_traj.append(soc)
     return (total, np.array(soc_traj)) if return_soc else total
 
@@ -147,8 +154,10 @@ def main(n_eval=40, n_sim_mcts=800):
         ax2b.legend(loc="upper right", fontsize=8)
 
         fig.tight_layout()
-        fig.savefig("comparaison_stochastique.png", dpi=120)
-        print("Figure enregistree : comparaison_stochastique.png")
+        FIGDIR.mkdir(exist_ok=True)
+        out = FIGDIR / "comparaison_stochastique.png"
+        fig.savefig(out, dpi=120)
+        print("Figure enregistree : %s" % out)
     except Exception as exc:
         print("(Figure non generee : %s)" % exc)
 

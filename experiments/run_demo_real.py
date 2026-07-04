@@ -2,33 +2,46 @@
 
 Cadre deterministe a prevision parfaite (la semaine reelle est connue) : la PD
 donne l'optimum exact, contre lequel on mesure heuristiques et MCTS. C'est le
-pendant de run_demo.py, mais sur donnees reelles.
+pendant de run_demo.py, mais sur donnees reelles. Une demande interne constante
+(15 % du pic solaire, valorisee au prix d'evitement 90 €/MWh) active le canal
+"consommer" : pendant les heures a prix negatif ou bas, consommer sa propre
+production vaut mieux que la vendre.
 
-Lancement :  python run_demo_real.py [debut] [fin]   (defaut : une semaine 2024)
+Lancement :  python experiments/run_demo_real.py [debut] [fin] [n_seeds]
+             (defaut : une semaine de juin 2024, 3 graines MCTS)
 """
 
 import sys
+from pathlib import Path
+
 import numpy as np
 
-from data_loader import build_real_env
-from baselines import (policy_always_sell, policy_threshold,
-                       policy_greedy_myopic, dp_optimal)
-from mcts import MCTSPlanner
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+FIGDIR = ROOT / "figures"
+
+from core.data_loader import build_real_env
+from core.baselines import (policy_always_sell, policy_threshold,
+                            policy_greedy_myopic, dp_optimal)
+from core.mcts import MCTSPlanner
 
 
-def main(start="2024-06-10", end="2024-06-16"):
+def main(start="2024-06-10", end="2024-06-16", n_seeds=3):
     env, ts, prices, production = build_real_env(
-        start, end, capacity_frac=0.6, power_frac=0.3, n_actions=11)
+        start, end, capacity_frac=0.6, power_frac=0.3, n_actions=11,
+        demand_frac=0.15, p_consume=90.0)
     H = env.H
     print("Donnees France %s -> %s : %d heures" % (start, end, H))
     print("Prix €/MWh : min %.1f  moy %.1f  max %.1f  (%d h negatives)"
           % (prices.min(), prices.mean(), prices.max(), int((prices < 0).sum())))
-    print("Solaire MW : pic %.0f | capacite stockage %.0f MWh\n"
-          % (production.max(), env.capacity))
+    print("Solaire MW : pic %.0f | stockage %.0f MWh | demande interne %.0f MW "
+          "(evitement 90 €/MWh)"
+          % (production.max(), env.capacity, env.demand[0]))
+    print("Espace de recherche : %d^%d sequences\n" % (env.n_actions, H))
 
-    results, socs = {}, {}
+    results, spread, socs = {}, {}, {}
     threshold = policy_threshold(env)
-    for name, pol in [("Tout vendre", policy_always_sell(env)),
+    for name, pol in [("Sans stockage (u=0)", policy_always_sell(env)),
                       ("Glouton myope", policy_greedy_myopic(env)),
                       ("Seuil (mediane)", threshold)]:
         results[name], socs[name], _ = env.rollout_policy(pol)
@@ -36,24 +49,35 @@ def main(start="2024-06-10", end="2024-06-16"):
     dp_policy, v0 = dp_optimal(env, n_soc=241)
     results["Optimum (PD)"], socs["Optimum (PD)"], _ = env.rollout_policy(dp_policy)
 
-    p, socs["MCTS rollout seuil"], _ = MCTSPlanner(
-        env, n_simulations=300, c=1.0, rollout_policy=threshold, seed=1).run()
-    results["MCTS rollout seuil"] = p
+    profs = []
+    for sd in range(n_seeds):
+        p, soc, _ = MCTSPlanner(env, n_simulations=300, c=1.0,
+                                rollout_policy=threshold, seed=sd).run()
+        profs.append(p)
+        if sd == 0:
+            socs["MCTS rollout seuil"] = soc
+    profs = np.array(profs)
+    results["MCTS rollout seuil"] = float(profs.mean())
+    spread["MCTS rollout seuil"] = float(profs.std())
 
-    base = results["Tout vendre"]
+    base = results["Sans stockage (u=0)"]
     opt = results["Optimum (PD)"]
     storage_value = opt - base
 
-    print("=" * 60)
-    print("%-22s %12s %8s %11s" % ("Strategie", "Profit €", "%opt", "%arbitrage"))
-    print("-" * 60)
-    for name in ["Tout vendre", "Glouton myope", "Seuil (mediane)",
+    print("=" * 68)
+    print("%-22s %18s %8s %11s" % ("Strategie", "Profit €", "%opt", "%arbitrage"))
+    print("-" * 68)
+    for name in ["Sans stockage (u=0)", "Glouton myope", "Seuil (mediane)",
                  "MCTS rollout seuil", "Optimum (PD)"]:
         pr = results[name]
         gain = 100.0 * (pr - base) / storage_value if storage_value else 0.0
-        print("%-22s %12.0f %7.1f%% %10.1f%%"
-              % (name, pr, 100.0 * pr / opt if opt else 0, gain))
-    print("=" * 60)
+        if name in spread:
+            pr_str = "%10.0f +-%4.0f" % (pr, spread[name])
+        else:
+            pr_str = "%18.0f" % pr
+        print("%-22s %18s %7.1f%% %10.1f%%"
+              % (name, pr_str, 100.0 * pr / opt if opt else 0, gain))
+    print("=" * 68)
     print("Valeur de l'arbitrage de stockage : %.0f €" % storage_value)
 
     try:
@@ -64,6 +88,8 @@ def main(start="2024-06-10", end="2024-06-16"):
         fig, ax = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
         ax[0].plot(hours, prices, color="tab:red", label="Prix day-ahead")
         ax[0].axhline(0, color="grey", lw=0.8)
+        ax[0].axhline(90, color="tab:purple", lw=0.8, ls=":",
+                      label="Prix d'evitement (conso)")
         ax[0].fill_between(hours, prices, 0, where=(prices < 0),
                            color="tab:red", alpha=0.25, label="Prix negatif")
         ax0b = ax[0].twinx()
@@ -78,8 +104,10 @@ def main(start="2024-06-10", end="2024-06-16"):
         ax[1].set_title("Trajectoires de stockage")
         ax[1].legend(loc="upper left", fontsize=8)
         fig.tight_layout()
-        fig.savefig("comparaison_reelle.png", dpi=120)
-        print("Figure enregistree : comparaison_reelle.png")
+        FIGDIR.mkdir(exist_ok=True)
+        out = FIGDIR / "comparaison_reelle.png"
+        fig.savefig(out, dpi=120)
+        print("Figure enregistree : %s" % out)
     except Exception as exc:
         print("(Figure non generee : %s)" % exc)
 
@@ -88,4 +116,5 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     s = args[0] if len(args) > 0 else "2024-06-10"
     e = args[1] if len(args) > 1 else "2024-06-16"
-    main(s, e)
+    n = int(args[2]) if len(args) > 2 else 3
+    main(s, e, n)

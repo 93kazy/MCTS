@@ -1,10 +1,10 @@
-"""Phase 5 — Monte Carlo Tree Search (UCT) pour le MDP a horizon fini.
+"""Monte Carlo Tree Search (UCT) pour le MDP deterministe a horizon fini.
 
 Le MCTS est utilise comme PLANIFICATEUR a horizon glissant (style MPC) : a
-chaque pas reel, on construit un arbre depuis l'etat courant (t, soc), on choisit
-l'action la plus visitee, on l'execute, on avance, et on recommence. C'est la
-maniere naturelle d'employer le MCTS comme politique et celle qui s'etendra
-directement au cas STOCHASTIQUE (il suffira d'echantillonner prix/production
+chaque pas reel, on construit un arbre depuis l'etat courant (t, soc), on
+choisit l'action la plus visitee, on l'execute, on avance, et on recommence.
+C'est la maniere naturelle d'employer le MCTS comme politique et celle qui
+s'etend directement au cas STOCHASTIQUE (il suffit d'echantillonner les prix
 dans les rollouts au lieu de les rejouer a l'identique).
 
 Les quatre phases d'une simulation :
@@ -15,9 +15,11 @@ Les quatre phases d'une simulation :
   4. Retropropagation : on remonte le retour-a-venir (return-to-go).
 
 Chaque noeud estime la valeur RESTANTE depuis lui-meme (somme des recompenses
-futures). La valeur d'une action a depuis un noeud = recompense d'arete r(noeud,a)
-+ valeur estimee de l'enfant. UCT est normalise localement (min/max des valeurs
-d'action du noeud) pour rester robuste a l'echelle des recompenses.
+futures). La valeur d'une action a depuis un noeud = recompense d'arete
+r(noeud, a) + valeur estimee de l'enfant. UCT est normalise localement
+(min/max des valeurs d'action du noeud) pour rester robuste a l'echelle des
+recompenses. Fonctionne dans les deux modes d'action de l'environnement
+("grid" et "simple3").
 """
 
 import math
@@ -54,13 +56,21 @@ class MCTSPlanner:
         root = _Node(t, soc, self.n_actions)
         for _ in range(self.n_simulations):
             self._simulate(root)
-        # Action la plus visitee (choix robuste, standard en MCTS).
-        return max(root.children, key=lambda a: root.children[a].N)
+        # Action la plus visitee (choix robuste, standard en MCTS) ;
+        # egalite departagee par la valeur estimee.
+        return max(root.children,
+                   key=lambda a: (root.children[a].N,
+                                  root.edge_r[a]
+                                  + root.children[a].W / root.children[a].N))
 
     # ---- une simulation complete (recursive) ---- #
     def _simulate(self, node):
         # Renvoie le retour-a-venir depuis `node`.
         if node.t >= self.H:
+            # Compter aussi les visites des noeuds TERMINAUX : sans cela, au
+            # dernier pas de l'horizon, tous les enfants de la racine gardent
+            # N = 1 et "l'action la plus visitee" devient un choix arbitraire.
+            node.N += 1
             return 0.0
 
         if node.untried:  # ----- Expansion -----

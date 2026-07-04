@@ -10,6 +10,9 @@ Trois niveaux de comparaison :
     la prevision MOYENNE des prix, on joue la 1re action, on recommence. Ignore
     l'incertitude -> sous-optimal des que la valeur est non lineaire en l'alea
     (contraintes de stockage, pics de prix).
+
+Toutes utilisent l'interface transition/revenue de l'environnement : la
+dynamique du stockage (sans prix) est partagee, seul le prix branche change.
 """
 
 import numpy as np
@@ -30,8 +33,9 @@ def solve_det_dp(env, prices, t0=0, n_soc=61, soc_grid=None):
         for i, soc in enumerate(soc_grid):
             best, ba = -1e18, 0
             for a in range(env.n_actions):
-                soc_n, sold = env.dispatch(soc, t, a)
-                val = sold * prices[t] + np.interp(soc_n, soc_grid, V[t + 1])
+                soc_n, out, forced = env.transition(soc, t, a)
+                val = (env.revenue(out, forced, t, prices[t])
+                       + np.interp(soc_n, soc_grid, V[t + 1]))
                 if val > best:
                     best, ba = val, a
             V[t, i] = best
@@ -85,11 +89,12 @@ def _interp_row(x, soc_grid, Vnext):
 def solve_sdp(env, model, n_soc=61):
     """Resout l'optimum causal exact du MDP augmente (t, soc, etat_prix).
 
-      V(t, soc, s) = max_a { sold(soc,a)*prix(s,t) + E_{s'~P[s]} V(t+1, soc', s') }
+      V(t, soc, s) = max_a { revenu(soc, a, prix(s,t)) + E_{s'~P[s]} V(t+1, soc', s') }
 
     Renvoie une politique causale (t, soc, s) -> action et la valeur V0.
     Complexite : O(H * n_soc * n_actions * S) (+ esperance S). La separation
-    prix/dynamique (soc' independant de s) permet de vectoriser l'esperance.
+    prix/dynamique (soc' independant de s) permet de calculer la transition une
+    seule fois par (soc, a) puis de valoriser sur tous les etats de prix.
     """
     H, S = env.H, model.S
     soc_grid = np.linspace(0.0, env.capacity, n_soc)
@@ -102,12 +107,13 @@ def solve_sdp(env, model, n_soc=61):
         price_s = np.array([model.price(s, t) for s in range(S)])   # (S,)
         Vnext = V[t + 1]                                            # (nS, S)
         for i, soc in enumerate(soc_grid):
-            # soc'/sold ne dependent pas de s -> calcul une fois par (i, a)
+            # soc'/out ne dependent pas de s -> calcul une fois par (i, a)
             q = np.full((env.n_actions, S), -1e18)
             for a in range(env.n_actions):
-                soc_n, sold = env.dispatch(soc, t, a)
+                soc_n, out, forced = env.transition(soc, t, a)
                 ev = P @ _interp_row(soc_n, soc_grid, Vnext)        # (S,) esperance
-                q[a] = sold * price_s + ev                          # (S,)
+                rev = np.array([env.revenue(out, forced, t, p) for p in price_s])
+                q[a] = rev + ev                                     # (S,)
             best_a = np.argmax(q, axis=0)                           # (S,)
             V[t, i] = q[best_a, np.arange(S)]
             pol[t, i] = best_a

@@ -18,6 +18,8 @@ prend une vraie valeur (cas realiste et interessant pour le projet).
 API (aucune cle requise) :
   load_real_series(start, end) -> (timestamps, prices, production)
   build_real_env(start, end, ...) -> EnergyStorageEnv
+
+Test rapide du chargeur :  python -m core.data_loader  (depuis la racine)
 """
 
 import json
@@ -27,7 +29,13 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from environment import EnergyStorageEnv
+try:
+    from .environment import EnergyStorageEnv
+except ImportError:  # execution directe : python core/data_loader.py
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from core.environment import EnergyStorageEnv
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (research)"}
 
@@ -100,16 +108,24 @@ def load_real_series(start, end):
 
 
 def build_real_env(start, end, capacity_frac=0.5, power_frac=0.25,
-                   eta_charge=0.95, eta_discharge=0.95, n_actions=11, soc0=0.0):
+                   eta_charge=0.95, eta_discharge=0.95, n_actions=11,
+                   soc0=0.0, demand_frac=0.0, p_consume=90.0):
     """Construit un EnergyStorageEnv a partir de vraies donnees France.
 
     Le stockage est dimensionne par rapport au pic de production solaire :
       capacity   = capacity_frac * pic_solaire
       max_charge = max_discharge = power_frac * pic_solaire
+
+    Canal consommation (optionnel) : demande interne constante
+      demand = demand_frac * pic_solaire, valorisee au prix d'evitement
+      p_consume (€/MWh, p.ex. un tarif de detail). demand_frac=0 => pur
+      arbitrage vendre/stocker.
     """
     ts, prices, production = load_real_series(start, end)
     peak = float(np.max(production)) if np.max(production) > 0 else 1.0
+    demand = np.full(len(prices), demand_frac * peak)
     env = EnergyStorageEnv(prices, production,
+                           demand=demand, p_consume=p_consume,
                            capacity=capacity_frac * peak,
                            eta_charge=eta_charge, eta_discharge=eta_discharge,
                            max_charge=power_frac * peak,

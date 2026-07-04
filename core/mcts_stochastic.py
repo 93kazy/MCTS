@@ -1,6 +1,6 @@
 """MCTS stochastique : MCTS/UCT pour MDP a transitions ALEATOIRES.
 
-Difference avec la phase 5 deterministe : apres une action, l'etat de prix
+Difference avec la version deterministe : apres une action, l'etat de prix
 suivant est tire au sort dans le modele de Markov (noeud de hasard). On ne fait
 PAS d'arbre exhaustif sur les aleas ; a chaque passage on echantillonne l'etat
 suivant s' ~ P[s] et on agrege les retours par action. C'est l'approche standard
@@ -49,15 +49,19 @@ class StochasticMCTSPlanner:
         # Action la plus visitee.
         return max(root.astats, key=lambda a: root.astats[a][0])
 
+    def _step(self, soc, t, a, s):
+        """Transition + revenu au prix de l'etat s (dynamique sans prix)."""
+        soc_n, out, forced = self.env.transition(soc, t, a)
+        r = self.env.revenue(out, forced, t, self.model.price(s, t))
+        return soc_n, r
+
     def _simulate(self, node):
         if node.t >= self.H:
             return 0.0
-        price = self.model.price(node.s, node.t)
 
         if node.untried:  # ----- Expansion -----
             a = node.untried.pop(self.rng.integers(len(node.untried)))
-            soc_n, sold = self.env.dispatch(node.soc, node.t, a)
-            r = sold * price
+            soc_n, r = self._step(node.soc, node.t, a, node.s)
             s2 = self.model.sample_next(node.s, self.rng)        # noeud de hasard
             child = _Node(node.t + 1, soc_n, s2, self.n_actions)
             node.kids[(a, s2)] = child
@@ -65,8 +69,7 @@ class StochasticMCTSPlanner:
             node.astats[a] = [1, g]
         else:             # ----- Selection (UCT) + recursion -----
             a = self._uct_select(node)
-            soc_n, sold = self.env.dispatch(node.soc, node.t, a)
-            r = sold * price
+            soc_n, r = self._step(node.soc, node.t, a, node.s)
             s2 = self.model.sample_next(node.s, self.rng)        # on re-echantillonne
             child = node.kids.get((a, s2))
             if child is None:
@@ -100,8 +103,8 @@ class StochasticMCTSPlanner:
                 a = int(self.rng.integers(self.n_actions))
             else:
                 a = self.rollout_policy(t, soc, s)
-            soc, sold = self.env.dispatch(soc, t, a)
-            g += sold * self.model.price(s, t)
+            soc, r = self._step(soc, t, a, s)
+            g += r
             s = self.model.sample_next(s, self.rng)   # le prix evolue dans le rollout
             t += 1
         return g
@@ -115,15 +118,16 @@ class StochasticMCTSPlanner:
         for t in range(self.H):
             s = int(state_path[t])
             a = self.plan_action(t, soc, s)
-            soc, sold = self.env.dispatch(soc, t, a)
-            total += sold * self.model.price(s, t)
+            soc, r = self._step(soc, t, a, s)
+            total += r
         return total
 
 
 def stochastic_threshold_policy(env, model, threshold):
     """Heuristique de seuil adaptee au stochastique (seuil sur le prix courant) :
     si prix >= seuil on vend au maximum (decharge), sinon on stocke au maximum.
-    Sert d'heuristique simple ET de politique de rollout informee pour le MCTS."""
+    Sert d'heuristique simple ET de politique de rollout informee pour le MCTS.
+    (Mode d'action "grid" attendu, comme dans les demos stochastiques.)"""
     idx_max_discharge = 0
     idx_max_charge = env.n_actions - 1
 
