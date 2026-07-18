@@ -1,109 +1,77 @@
-# `core/` — modèle, algorithmes et données
+# `core/` — le code partagé
 
-Package commun à toutes les expériences : **une seule implémentation** de
-l'environnement, des stratégies de référence et du MCTS (plus de copies par
-dossier). Les scripts de `experiments/` importent `core.*`.
+Toute la logique du projet est ici ; les scripts de `experiments/` ne font
+qu'appeler ces modules.
 
-## Le MDP (`environment.py`)
+## `environment.py` — le MDP
 
-Problème de **producteur** : à chaque heure `t`, la centrale produit
-`production[t]`, observe le prix spot `prices[t]` et une demande interne
-`demand[t]`. L'énergie produite (ou déstockée) peut être :
+À chaque heure `t`, la centrale produit `production[t]`, voit le prix spot
+`prices[t]` et une demande interne `demand[t]`. Son énergie peut être :
 
-- **vendue** au prix spot `prices[t]` ;
-- **stockée** en batterie (capacité `capacity`, rendements `eta_charge` /
-  `eta_discharge`, débits max `max_charge` / `max_discharge`) ;
-- **consommée** pour couvrir la demande interne, valorisée au **prix
-  d'évitement** `p_consume[t]` (coût de l'électricité qu'on n'a pas achetée,
-  p. ex. un tarif de détail).
+- vendue au prix spot ;
+- stockée dans la batterie (capacité, rendements charge/décharge, débits max) ;
+- consommée pour couvrir la demande interne, valorisée au prix d'évitement
+  `p_consume[t]` (le prix qu'on aurait payé pour l'acheter).
 
-État `(t, soc)` ; récompense = `vendu × prices[t] + consommé × p_consume[t]` ;
-horizon fini `H`, sans actualisation. Pas d'achat sur le marché : le stockage
-ne fait que **décaler dans le temps** l'usage de sa propre production.
+L'état est `(t, soc)`, la récompense `vendu × prix + consommé × p_consume`, sur
+un horizon fini sans actualisation. La centrale n'achète jamais sur le marché :
+le stockage sert seulement à décaler l'usage de sa propre production.
 
-### Deux espaces d'action (`action_mode`)
+Deux modes d'action (`action_mode`) :
 
-- **`"simple3"`** — les trois actions littérales du sujet : `VENDRE`
-  (décharge max + tout vendre), `STOCKER` (charge max, surplus vendu),
-  `CONSOMMER` (couvrir la demande, surplus vendu). C'est exactement l'arbre
-  **3^H** de l'énoncé (3^24 ≈ 2,8 × 10¹¹ pour une journée).
-- **`"grid"`** (défaut) — généralisation : l'action est un **débit de
-  stockage** `u` parmi `n_actions` valeurs (u > 0 charge, u < 0 décharge,
-  u = 0 rien). L'énergie non stockée est répartie entre vente et consommation
-  **par dominance** : à énergie dispatchée donnée, la répartition n'affecte pas
-  le stock et n'a donc aucun effet futur — l'affectation optimale est immédiate
-  (consommer d'abord si `p_consume[t] > prices[t]`, dans la limite de la
-  demande, vendre le reste). La seule décision séquentielle non triviale — le
-  stockage — reste seule dans l'espace d'action, sans actions dominées, et
-  l'arbre `n_actions^H` ≫ 3^H renforce l'argument combinatoire du sujet.
+- `"simple3"` : les trois actions de l'énoncé (vendre / stocker / consommer),
+  donc l'arbre 3^H.
+- `"grid"` (défaut) : l'action est un débit de stockage `u` parmi `n_actions`
+  valeurs. Le partage du reste entre vente et consommation ne dépend que du prix
+  (on consomme si `p_consume > prix`), donc il est fait directement, ce qui
+  laisse le stockage comme seule vraie décision. L'arbre `n_actions^H` est encore
+  plus grand.
 
-### Interface pour les planificateurs
+La dynamique est séparée du prix : `transition()` renvoie le stock suivant et
+l'énergie à écouler, `revenue()` applique un prix. Ça permet de brancher le prix
+déterministe ou le modèle stochastique sur la même batterie sans dupliquer le
+code. `apply()` fait les deux avec les prix réels de l'environnement.
 
-```
-transition(soc, t, a) -> (soc', out, forced)   # dynamique SANS prix
-revenue(out, forced, t, price) -> récompense   # valorisation à prix donné
-apply(soc, t, a) -> (soc', récompense)         # raccourci prix déterministes
-```
+`make_synthetic_data()` génère des profils journaliers (prix creux à midi,
+production solaire en cloche, demande le soir).
 
-La séparation transition/revenue permet aux méthodes stochastiques de brancher
-un prix externe (échantillonné dans le modèle de prix) **sans dupliquer la
-dynamique** — c'est la même batterie dans tous les cadres.
+## `baselines.py` — références
 
-`make_synthetic_data(days, seed)` fournit des profils journaliers plausibles
-(prix en « duck curve », production solaire en cloche, demande avec bosse du
-soir), pour garder la maîtrise des paramètres expérimentaux.
+Quelques heuristiques (aléatoire, tout vendre, glouton myope, seuil de prix) et
+surtout `dp_optimal`, l'optimum exact par programmation dynamique (induction
+arrière sur une grille de soc). C'est le 100 % contre lequel on mesure le MCTS.
+Il est vérifié contre une énumération exhaustive dans les tests.
 
-## Stratégies de référence (`baselines.py`)
+## `mcts.py` — le MCTS
 
-- **Heuristiques** : aléatoire (plancher), sans stockage (`u=0`), glouton myope
-  (max de la récompense immédiate — illustre le coût de la myopie), seuil de
-  prix (vendre si prix ≥ médiane, sinon stocker — l'arbitrage classique).
-- **`dp_optimal`** : optimum exact du MDP discrétisé par **programmation
-  dynamique** (induction arrière sur une grille de soc, interpolation
-  linéaire). C'est le **plafond théorique** en déterministe ; le MCTS est
-  mesuré en pourcentage de cette borne. Vérifiée contre une énumération
-  exhaustive dans les tests.
+`MCTSPlanner` en horizon glissant : à chaque pas on construit un arbre depuis
+l'état courant, on joue l'action la plus visitée, puis on recommence. Les quatre
+phases habituelles (sélection UCT, expansion, rollout, rétropropagation). Deux
+points à noter :
 
-## MCTS déterministe (`mcts.py`)
+- les valeurs d'action sont normalisées dans [0,1] avant UCT, pour que la
+  constante `c` garde le même sens quelle que soit l'échelle des prix ;
+- les nœuds terminaux comptent leurs visites (sans ça, au dernier pas le choix
+  « action la plus visitée » devient arbitraire — repéré par les tests).
 
-`MCTSPlanner` : UCT à **horizon glissant** (style MPC) — à chaque pas réel, un
-arbre est construit depuis `(t, soc)`, l'action la plus visitée est exécutée,
-puis on replanifie. Les quatre phases classiques (sélection UCT, expansion,
-rollout, rétropropagation). Deux choix d'implémentation notables :
+Le rollout peut être aléatoire ou informé par une politique (le seuil de prix).
+C'est ce qui change le plus la performance.
 
-- **Normalisation locale d'UCT** : les valeurs d'action d'un nœud sont
-  ramenées dans [0, 1] (min/max locaux) avant d'ajouter le terme d'exploration,
-  pour rester robuste à l'échelle des récompenses (€ vs centaines de k€).
-- **Visites des nœuds terminaux comptées** : au dernier pas de l'horizon, les
-  enfants de la racine sont terminaux ; sans incrément de leur compteur, le
-  choix « action la plus visitée » y serait arbitraire (bug détecté par les
-  tests unitaires, corrigé).
+## Cas stochastique
 
-Le rollout est soit aléatoire, soit **informé** par une politique passée en
-paramètre (typiquement l'heuristique de seuil) — c'est le levier de performance
-principal, voir `experiments/run_sensitivity.py`.
+- `price_model.py` : le prix = moyenne saisonnière connue + une déviation
+  aléatoire (chaîne de Markov, avec des pics). Donne la matrice de transition
+  (pour le SDP) et de quoi échantillonner des scénarios (pour le MCTS).
+- `stochastic.py` : borne clairvoyante (DP sur le chemin réalisé), SDP (optimum
+  causal exact sur `(t, soc, état_prix)`), équivalent-certain (on re-optimise à
+  chaque pas sur la prévision moyenne).
+- `mcts_stochastic.py` : même MCTS mais l'état de prix suivant est échantillonné
+  après chaque action. N'utilise que `sample_next`, jamais la matrice.
 
-## Version stochastique (`price_model.py`, `stochastic.py`, `mcts_stochastic.py`)
+## `data_loader.py` — données réelles
 
-- **`MarkovPriceModel`** : prix = moyenne saisonnière connue + déviation à
-  retour à la moyenne, discrétisée en chaîne de Markov avec queue haute (pics).
-  Fournit la matrice de transition (pour le SDP) **et** un modèle génératif
-  (seul requis par le MCTS).
-- **`stochastic.py`** : borne **clairvoyante** (DP sur le chemin réalisé),
-  **SDP** (optimum causal exact sur l'état augmenté `(t, soc, état_prix)`),
-  **équivalent-certain** (MPC : re-optimisation déterministe sur la prévision
-  moyenne à chaque pas).
-- **`StochasticMCTSPlanner`** : UCT pour MDP à transitions aléatoires — l'état
-  de prix suivant est **échantillonné** à chaque passage (pas d'arbre exhaustif
-  sur les aléas), les retours sont agrégés par action. N'utilise que
-  `sample_next` : extensible à des modèles de prix riches où le SDP explose.
-
-## Données réelles (`data_loader.py`)
-
-Prix day-ahead France (energy-charts.info, CC BY 4.0) + production solaire
-France (ODRÉ / éCO2mix, RTE), alignés sur une grille **horaire UTC** (évite les
-jours de 23 h / 25 h aux changements d'heure). Les **prix négatifs sont
-conservés** : pour un producteur qui doit écouler sa production, ils donnent au
-stockage une valeur bien réelle. `build_real_env(...)` dimensionne le stockage
-en fraction du pic solaire et peut activer une demande interne
-(`demand_frac`, `p_consume`). Test rapide : `python -m core.data_loader`.
+Télécharge les prix day-ahead et le solaire France et les aligne sur une grille
+horaire UTC (évite les jours de 23/25 h). Les prix négatifs sont gardés (ils
+donnent de la valeur au stockage). `build_real_env()` construit l'environnement
+en dimensionnant la batterie par rapport au pic solaire. Test :
+`python -m core.data_loader`.
