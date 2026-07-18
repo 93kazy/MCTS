@@ -1,14 +1,9 @@
-"""Demonstration sur VRAIES donnees France (prix day-ahead + solaire).
-
-Cadre deterministe a prevision parfaite (la semaine reelle est connue) : la PD
-donne l'optimum exact, contre lequel on mesure heuristiques et MCTS. C'est le
-pendant de run_demo.py, mais sur donnees reelles. Une demande interne constante
-(15 % du pic solaire, valorisee au prix d'evitement 90 €/MWh) active le canal
-"consommer" : pendant les heures a prix negatif ou bas, consommer sa propre
-production vaut mieux que la vendre.
+"""Meme comparaison que run_demo.py mais sur de vraies donnees France (prix
+day-ahead + solaire). La semaine est connue, donc la PD reste l'optimum exact.
+Une demande interne (15 % du pic solaire, prix d'evitement 90 €/MWh) active la
+consommation : aux heures a prix negatif, consommer vaut mieux que vendre.
 
 Lancement :  python experiments/run_demo_real.py [debut] [fin] [n_seeds]
-             (defaut : une semaine de juin 2024, 3 graines MCTS)
 """
 
 import sys
@@ -22,7 +17,7 @@ FIGDIR = ROOT / "figures"
 
 from core.data_loader import build_real_env
 from core.baselines import (policy_always_sell, policy_threshold,
-                            policy_greedy_myopic, dp_optimal)
+                            policy_greedy_myopic, policy_random, dp_optimal)
 from core.mcts import MCTSPlanner
 
 
@@ -31,7 +26,10 @@ def main(start="2024-06-10", end="2024-06-16", n_seeds=3):
         start, end, capacity_frac=0.6, power_frac=0.3, n_actions=11,
         demand_frac=0.15, p_consume=90.0)
     H = env.H
-    print("Donnees France %s -> %s : %d heures" % (start, end, H))
+    span_h = int(round((ts[-1] - ts[0]) / 3600)) + 1
+    print("Donnees France %s -> %s : %d heures alignees (fenetre %d h ; "
+          "%d h sans prix ou solaire commun)"
+          % (start, end, H, span_h, span_h - H))
     print("Prix €/MWh : min %.1f  moy %.1f  max %.1f  (%d h negatives)"
           % (prices.min(), prices.mean(), prices.max(), int((prices < 0).sum())))
     print("Solaire MW : pic %.0f | stockage %.0f MWh | demande interne %.0f MW "
@@ -41,7 +39,8 @@ def main(start="2024-06-10", end="2024-06-16", n_seeds=3):
 
     results, spread, socs = {}, {}, {}
     threshold = policy_threshold(env)
-    for name, pol in [("Sans stockage (u=0)", policy_always_sell(env)),
+    for name, pol in [("Aleatoire", policy_random(env, seed=0)),
+                      ("Sans stockage (u=0)", policy_always_sell(env)),
                       ("Glouton myope", policy_greedy_myopic(env)),
                       ("Seuil (mediane)", threshold)]:
         results[name], socs[name], _ = env.rollout_policy(pol)
@@ -49,16 +48,18 @@ def main(start="2024-06-10", end="2024-06-16", n_seeds=3):
     dp_policy, v0 = dp_optimal(env, n_soc=241)
     results["Optimum (PD)"], socs["Optimum (PD)"], _ = env.rollout_policy(dp_policy)
 
-    profs = []
-    for sd in range(n_seeds):
-        p, soc, _ = MCTSPlanner(env, n_simulations=300, c=1.0,
-                                rollout_policy=threshold, seed=sd).run()
-        profs.append(p)
-        if sd == 0:
-            socs["MCTS rollout seuil"] = soc
-    profs = np.array(profs)
-    results["MCTS rollout seuil"] = float(profs.mean())
-    spread["MCTS rollout seuil"] = float(profs.std())
+    for label, rollout in [("MCTS rollout aleatoire", None),
+                           ("MCTS rollout seuil", threshold)]:
+        profs = []
+        for sd in range(n_seeds):
+            p, soc, _ = MCTSPlanner(env, n_simulations=300, c=1.0,
+                                    rollout_policy=rollout, seed=sd).run()
+            profs.append(p)
+            if sd == 0:
+                socs[label] = soc
+        profs = np.array(profs)
+        results[label] = float(profs.mean())
+        spread[label] = float(profs.std())
 
     base = results["Sans stockage (u=0)"]
     opt = results["Optimum (PD)"]
@@ -67,7 +68,8 @@ def main(start="2024-06-10", end="2024-06-16", n_seeds=3):
     print("=" * 68)
     print("%-22s %18s %8s %11s" % ("Strategie", "Profit €", "%opt", "%arbitrage"))
     print("-" * 68)
-    for name in ["Sans stockage (u=0)", "Glouton myope", "Seuil (mediane)",
+    for name in ["Aleatoire", "Sans stockage (u=0)", "Glouton myope",
+                 "Seuil (mediane)", "MCTS rollout aleatoire",
                  "MCTS rollout seuil", "Optimum (PD)"]:
         pr = results[name]
         gain = 100.0 * (pr - base) / storage_value if storage_value else 0.0

@@ -1,18 +1,8 @@
-"""Demonstration deterministe : heuristiques, optimum (PD) et MCTS sur donnees
-synthetiques, avec les trois usages du sujet (vendre / stocker / consommer).
+"""Comparaison heuristiques / PD / MCTS sur donnees synthetiques.
 
-Metrique cle : le GAIN D'ARBITRAGE = part de la valeur du stockage captee,
-  gain = (profit - profit_sans_stockage) / (optimum - profit_sans_stockage)
-"Sans stockage" (u = 0 a chaque pas) vaut 0 % ; l'optimum (PD) vaut 100 %.
-Cette metrique isole ce que la strategie apporte VRAIMENT via le stockage, au
-lieu d'etre noyee dans le revenu de base de la vente/consommation au fil de
-l'eau.
-
-Le MCTS etant stochastique, il est evalue sur PLUSIEURS GRAINES : on rapporte
-moyenne +/- ecart-type.
-
-La demo joue aussi le mode "simple3" (les 3 actions litterales du sujet, arbre
-3^H) pour verifier que le MCTS y retrouve l'optimum exact du meme espace.
+Metrique : le gain d'arbitrage = (profit - sans_stockage) / (optimum - sans_stockage),
+qui vaut 0 % sans stockage et 100 % a l'optimum. Le MCTS est moyenne sur plusieurs
+graines. On teste aussi le mode "simple3" (les 3 actions du sujet).
 
 Lancement :  python experiments/run_demo.py [n_seeds] [n_simulations]
 """
@@ -33,7 +23,7 @@ from core.mcts import MCTSPlanner
 
 
 def eval_mcts(env, n_simulations, rollout, seeds, c=1.0):
-    """Joue le MCTS pour chaque graine ; renvoie (profits, soc_traj de la 1re)."""
+    """MCTS sur plusieurs graines ; renvoie (profits, trajectoire de la 1re)."""
     profits, soc_first = [], None
     for sd in seeds:
         p, soc, _ = MCTSPlanner(env, n_simulations=n_simulations, c=c,
@@ -47,7 +37,7 @@ def eval_mcts(env, n_simulations, rollout, seeds, c=1.0):
 def main(n_seeds=5, n_sim=1000):
     seeds = list(range(n_seeds))
 
-    # 1) Donnees + environnement (mode grid : 11 debits de stockage) ------------
+    # environnement en mode grid (11 debits de stockage)
     prices, production, demand = make_synthetic_data(days=2, seed=1)
     env = EnergyStorageEnv(prices, production, demand=demand, p_consume=70.0,
                            capacity=120.0, eta_charge=0.95, eta_discharge=0.95,
@@ -58,7 +48,7 @@ def main(n_seeds=5, n_sim=1000):
 
     results, spread, socs = {}, {}, {}
 
-    # 2) Heuristiques -----------------------------------------------------------
+    # heuristiques
     threshold = policy_threshold(env)
     for name, pol in [("Aleatoire", policy_random(env, seed=0)),
                       ("Sans stockage (u=0)", policy_always_sell(env)),
@@ -68,11 +58,11 @@ def main(n_seeds=5, n_sim=1000):
         results[name] = profit
         socs[name] = soc_traj
 
-    # 3) Optimum par programmation dynamique -------------------------------------
+    # optimum par programmation dynamique
     dp_policy, v0 = dp_optimal(env, n_soc=241)
     results["Optimum (PD)"], socs["Optimum (PD)"], _ = env.rollout_policy(dp_policy)
 
-    # 4) MCTS multi-graines : rollout aleatoire vs rollout informe ---------------
+    # MCTS : rollout aleatoire vs rollout informe
     profs, socs["MCTS rollout aleatoire"] = eval_mcts(env, n_sim, None, seeds)
     results["MCTS rollout aleatoire"] = float(profs.mean())
     spread["MCTS rollout aleatoire"] = float(profs.std())
@@ -81,7 +71,7 @@ def main(n_seeds=5, n_sim=1000):
     results["MCTS rollout seuil"] = float(profs.mean())
     spread["MCTS rollout seuil"] = float(profs.std())
 
-    # 5) Tableau comparatif -------------------------------------------------------
+    # tableau comparatif
     base = results["Sans stockage (u=0)"]
     opt = results["Optimum (PD)"]
     storage_value = opt - base
@@ -106,7 +96,7 @@ def main(n_seeds=5, n_sim=1000):
               % (name, prof_str, 100.0 * prof / opt, gain))
     print("=" * 72)
 
-    # 6) Mode "simple3" : les 3 actions litterales du sujet ----------------------
+    # mode "simple3" : les 3 actions du sujet
     env3 = EnergyStorageEnv(prices, production, demand=demand, p_consume=70.0,
                             capacity=120.0, eta_charge=0.95, eta_discharge=0.95,
                             max_charge=30.0, max_discharge=30.0,
@@ -124,7 +114,7 @@ def main(n_seeds=5, n_sim=1000):
     print("(Le mode grid ci-dessus, plus fin, atteint un optimum de %.1f : "
           "la grille de debits domine les 3 actions tout-ou-rien.)" % opt)
 
-    # 7) Figure des trajectoires --------------------------------------------------
+    # figure des trajectoires
     try:
         import matplotlib
         matplotlib.use("Agg")

@@ -87,9 +87,15 @@ par programmation dynamique) :
 - **Semaine réelle de juin 2024** (20 h de prix négatifs) : seuil ~25 %,
   **MCTS ~94 %** de la valeur d'arbitrage (98,7 % de l'optimum).
 - **Sensibilité** : le rollout est le levier décisif — informé par l'heuristique
-  de seuil, le MCTS dépasse 99 % dès ~100 simulations/pas ; en rollout aléatoire
-  il converge lentement. La constante d'exploration `c` a peu d'effet une fois
-  le rollout informé.
+  de seuil, le MCTS atteint ~96–99 % dès 30–100 simulations/pas ; en rollout
+  aléatoire il monte lentement avec le budget (~35 → 61 %) et plafonne loin de
+  l'optimum. La constante d'exploration `c` a peu d'effet une fois le rollout
+  informé.
+- **Temps de calcul & passage à l'échelle** : la PD est la moins chère sur
+  l'instance à 1 batterie (`run_timing.py`), mais son coût explose en `n_soc^B`
+  avec le nombre `B` de batteries. Avec `run_scaling.py`, le **MCTS devient plus
+  rapide dès 3 batteries** (0,65 s vs 13 s) puis reste le seul praticable quand
+  la PD devient infaisable — c'est le vrai argument en faveur du MCTS.
 - **Stochastique** : le MCTS (90 % avec 800 simulations/pas, en hausse avec le
   budget) approche l'optimum causal exact (SDP) en n'utilisant qu'un modèle
   génératif ; l'équivalent-certain reste une base très forte, et l'intérêt

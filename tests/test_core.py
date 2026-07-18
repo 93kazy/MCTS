@@ -152,10 +152,7 @@ class TestPlanners(unittest.TestCase):
         self.assertAlmostEqual(played, brute, delta=0.01 * abs(brute))
 
     def test_mcts_reaches_brute_force_optimum(self):
-        # Instance piegeuse : la valeur de "stocker" a t=2 n'apparait qu'un pas
-        # plus tard -> il faut assez d'exploration (c) et de budget pour que
-        # UCT ne famine pas cette action. Avec c=2 et 5000 simulations, le
-        # MCTS retrouve l'optimum exact de l'enumeration.
+        # avec assez d'exploration et de budget, le MCTS retrouve l'optimum exact
         env = small_env()
         brute = self.brute_force(env)
         profit, _, _ = MCTSPlanner(env, n_simulations=5000, c=2.0,

@@ -1,15 +1,9 @@
-"""Evaluation Monte Carlo de la version stochastique.
+"""Evaluation Monte Carlo du cas stochastique.
 
-On echantillonne de nombreux chemins de prix dans le modele de Markov. Pour
-chaque chemin, chaque politique est jouee EN BOUCLE FERMEE (causale : elle ne
-voit pas le futur), sauf le clairvoyant qui voit le chemin realise (borne haute).
-Comparaison APPARIEE : toutes les politiques sont evaluees sur les memes chemins.
-
-Lecture : la version stochastique sert a montrer (1) que le MCTS, n'utilisant
-qu'un modele GENERATIF, rejoint l'optimum causal exact (SDP) ; (2) que la
-re-optimisation deterministe sur la prevision moyenne (equivalent-certain) est
-ici une base tres forte. L'interet propre du MCTS est sa GENERALITE : il se passe
-de la matrice de transition et passe a l'echelle quand l'etat de prix s'enrichit.
+On tire beaucoup de chemins de prix dans le modele de Markov. Chaque politique
+est jouee en boucle fermee (elle ne voit pas le futur) sur les memes chemins ;
+le clairvoyant, lui, voit le chemin realise et donne la borne haute. On regarde
+si le MCTS (qui n'utilise qu'un modele generatif) rejoint l'optimum causal (SDP).
 
 Lancement :  python experiments/run_demo_stochastic.py [n_eval] [n_sim_mcts]
 """
@@ -114,13 +108,12 @@ def main(n_eval=40, n_sim_mcts=800):
     print("Cout de l'incertitude (clairvoyant - SDP) : %.1f  (%.1f%%)"
           % (mean_clair - opt, 100.0 * (mean_clair - opt) / mean_clair))
 
-    # ---- Figure : un scenario illustratif (avec pic) + comportements ----
+    # figure : le scenario avec le plus gros pic + les performances
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        # chemin avec le prix max le plus eleve = contient un pic
         k = int(np.argmax([model.price_array(sp).max() for sp in paths]))
         sp = paths[k]
         realized = model.price_array(sp)

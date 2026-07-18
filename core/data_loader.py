@@ -1,25 +1,10 @@
-"""Chargement de VRAIES donnees France pour le projet.
+"""Chargement de vraies donnees France (sans inscription) :
+  - prix day-ahead via energy-charts.info (EPEX SPOT, CC BY 4.0) ;
+  - production solaire via ODRE / eCO2mix (RTE).
 
-Deux sources ouvertes, sans inscription :
-  - PRIX day-ahead France (€/MWh, horaire) via energy-charts.info (Fraunhofer ISE).
-    Donnees sous-jacentes EPEX SPOT / ENTSO-E, rediffusees en CC BY 4.0
-    (source : Bundesnetzagentur | SMARD.de) -> citer la source.
-  - PRODUCTION solaire France (MW, pas 1/2 h) via ODRE / eCO2mix (RTE).
-
-Les deux series sont alignees sur une grille HORAIRE en UTC. Travailler en UTC
-evite le probleme des jours de 23 h / 25 h aux changements d'heure (la grille
-reste un fil horaire continu, sans trou ni doublon de calendrier local).
-
-Les prix NEGATIFS sont conserves tels quels : pour un producteur qui doit
-ecouler sa production (pas d'achat), vendre pendant une heure a prix negatif
-fait perdre de l'argent -> le stockage qui decale la vente hors de ces heures
-prend une vraie valeur (cas realiste et interessant pour le projet).
-
-API (aucune cle requise) :
-  load_real_series(start, end) -> (timestamps, prices, production)
-  build_real_env(start, end, ...) -> EnergyStorageEnv
-
-Test rapide du chargeur :  python -m core.data_loader  (depuis la racine)
+Les deux series sont alignees sur une grille horaire en UTC (evite les jours de
+23/25 h aux changements d'heure). Les prix negatifs sont gardes tels quels : pour
+un producteur qui doit ecouler sa production, ils donnent de la valeur au stockage.
 """
 
 import json
@@ -31,7 +16,7 @@ import numpy as np
 
 try:
     from .environment import EnergyStorageEnv
-except ImportError:  # execution directe : python core/data_loader.py
+except ImportError:  # si on lance python core/data_loader.py directement
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -46,11 +31,8 @@ def _get_json(url):
         return json.load(r)
 
 
-# ---------------------------------------------------------------------- #
-# Prix day-ahead France (energy-charts.info)                             #
-# ---------------------------------------------------------------------- #
 def fetch_prices(start, end, bzn="FR"):
-    """Renvoie {heure_unix_UTC : prix_eur_mwh}. `end` est inclus (jour entier)."""
+    """{heure_unix_UTC : prix}. `end` inclus."""
     url = ("https://api.energy-charts.info/price?bzn=%s&start=%s&end=%s"
            % (bzn, start, end))
     d = _get_json(url)
@@ -60,16 +42,12 @@ def fetch_prices(start, end, bzn="FR"):
     for t, p in zip(ts, px):
         if p is None:
             continue
-        out[(t // 3600) * 3600] = float(p)     # ancrage a l'heure pleine
+        out[(t // 3600) * 3600] = float(p)
     return out
 
 
-# ---------------------------------------------------------------------- #
-# Production solaire France (ODRE / eCO2mix)                             #
-# ---------------------------------------------------------------------- #
 def fetch_solar(start, end):
-    """Renvoie {heure_unix_UTC : solaire_MW} (moyenne des pas 1/2 h sur l'heure).
-    `end` exclu (borne haute de la fenetre)."""
+    """{heure_unix_UTC : solaire_MW} (moyenne des pas 1/2 h). `end` exclu."""
     where = ('date_heure>="%s" AND date_heure<"%s" AND solaire IS NOT NULL'
              % (start, end))
     url = ("https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/"
@@ -85,14 +63,10 @@ def fetch_solar(start, end):
     return {h: acc[h] / cnt[h] for h in acc}
 
 
-# ---------------------------------------------------------------------- #
-# Alignement horaire                                                     #
-# ---------------------------------------------------------------------- #
 def load_real_series(start, end):
-    """Aligne prix et production solaire sur les heures communes (UTC).
-    Renvoie (timestamps_unix, prices, production) tries chronologiquement."""
+    """Aligne prix et solaire sur les heures communes (UTC).
+    Renvoie (timestamps, prices, production)."""
     prices = fetch_prices(start, end)
-    # borne haute exclusive pour ODRE = lendemain de `end`
     end_excl = (datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
                 .timestamp())
     end_excl_str = datetime.fromtimestamp(end_excl + 86400, timezone.utc).strftime("%Y-%m-%d")
@@ -110,17 +84,9 @@ def load_real_series(start, end):
 def build_real_env(start, end, capacity_frac=0.5, power_frac=0.25,
                    eta_charge=0.95, eta_discharge=0.95, n_actions=11,
                    soc0=0.0, demand_frac=0.0, p_consume=90.0):
-    """Construit un EnergyStorageEnv a partir de vraies donnees France.
-
-    Le stockage est dimensionne par rapport au pic de production solaire :
-      capacity   = capacity_frac * pic_solaire
-      max_charge = max_discharge = power_frac * pic_solaire
-
-    Canal consommation (optionnel) : demande interne constante
-      demand = demand_frac * pic_solaire, valorisee au prix d'evitement
-      p_consume (€/MWh, p.ex. un tarif de detail). demand_frac=0 => pur
-      arbitrage vendre/stocker.
-    """
+    """Construit un EnergyStorageEnv a partir des vraies donnees. Le stockage est
+    dimensionne en fraction du pic solaire. demand_frac > 0 active la consommation
+    interne (demande constante valorisee a p_consume)."""
     ts, prices, production = load_real_series(start, end)
     peak = float(np.max(production)) if np.max(production) > 0 else 1.0
     demand = np.full(len(prices), demand_frac * peak)
@@ -135,7 +101,6 @@ def build_real_env(start, end, capacity_frac=0.5, power_frac=0.25,
 
 
 if __name__ == "__main__":
-    # Petit test : une semaine de juin 2024.
     ts, p, prod = load_real_series("2024-06-10", "2024-06-16")
     print("Heures alignees :", len(ts))
     print("Prix  €/MWh  : min %.1f  moy %.1f  max %.1f  (negatifs : %d h)"

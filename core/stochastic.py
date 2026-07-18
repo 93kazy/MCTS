@@ -1,28 +1,15 @@
-"""Strategies de reference en stochastique.
-
-Trois niveaux de comparaison :
-  - CLAIRVOYANT (borne haute) : DP deterministe sur le chemin de prix REALISE.
-    Voit le futur -> aucune politique causale ne peut faire mieux en esperance.
-    L'ecart clairvoyant - optimum_causal mesure le "cout de l'incertitude".
-  - SDP (optimum causal) : DP stochastique sur l'etat augmente (t, soc, etat_prix).
-    Meilleure politique possible SANS voir le futur, etant donne le modele.
-  - EQUIVALENT-CERTAIN (MPC) : a chaque pas, on re-optimise en deterministe sur
-    la prevision MOYENNE des prix, on joue la 1re action, on recommence. Ignore
-    l'incertitude -> sous-optimal des que la valeur est non lineaire en l'alea
-    (contraintes de stockage, pics de prix).
-
-Toutes utilisent l'interface transition/revenue de l'environnement : la
-dynamique du stockage (sans prix) est partagee, seul le prix branche change.
+"""Strategies de reference en stochastique :
+  - clairvoyant   : DP sur le chemin de prix reel (voit le futur, borne haute) ;
+  - SDP           : optimum causal exact (DP sur (t, soc, etat_prix)) ;
+  - equiv.-certain: a chaque pas, on re-optimise en deterministe sur la prevision
+                    moyenne des prix (MPC) et on joue la 1re action.
 """
 
 import numpy as np
 
 
-# ---------------------------------------------------------------------- #
-# DP deterministe parametre par une serie de prix arbitraire             #
-# (sert pour le clairvoyant et pour l'equivalent-certain)                #
-# ---------------------------------------------------------------------- #
 def solve_det_dp(env, prices, t0=0, n_soc=61, soc_grid=None):
+    """DP deterministe pour une serie de prix donnee."""
     H = env.H
     if soc_grid is None:
         soc_grid = np.linspace(0.0, env.capacity, n_soc)
@@ -44,25 +31,18 @@ def solve_det_dp(env, prices, t0=0, n_soc=61, soc_grid=None):
 
 
 def clairvoyant_value(env, realized_prices, n_soc=61):
-    """Borne haute pour un chemin de prix donne (prevision parfaite)."""
     V, _, soc_grid = solve_det_dp(env, realized_prices, t0=0, n_soc=n_soc)
     return float(np.interp(env.soc0, soc_grid, V[0]))
 
 
-# ---------------------------------------------------------------------- #
-# Equivalent-certain (MPC sur prevision moyenne)                         #
-# ---------------------------------------------------------------------- #
 def make_ce_mpc_policy(env, model, n_soc=51):
-    """Renvoie une politique causale (t, soc, s) -> action.
-
-    A chaque appel : construit la prevision moyenne des prix de t a H-1, resout
-    le DP deterministe sur cette prevision, renvoie l'action optimale en t.
-    """
+    """Politique equivalent-certain : a chaque pas, DP sur la prevision moyenne
+    de t a H-1, on renvoie l'action optimale en t."""
     soc_grid = np.linspace(0.0, env.capacity, n_soc)
 
     def policy(t, soc, s):
-        exp_dev = model.expected_future_devs(s, env.H - t)   # offsets 0..H-1-t
-        forecast = np.array(env.prices, dtype=float)         # gabarit, recopie
+        exp_dev = model.expected_future_devs(s, env.H - t)
+        forecast = np.array(env.prices, dtype=float)
         for k in range(env.H - t):
             forecast[t + k] = max(model.mu[t + k] + exp_dev[k], model.price_floor)
         _, pol, _ = solve_det_dp(env, forecast, t0=t, n_soc=n_soc, soc_grid=soc_grid)
@@ -72,11 +52,8 @@ def make_ce_mpc_policy(env, model, n_soc=51):
     return policy
 
 
-# ---------------------------------------------------------------------- #
-# Programmation dynamique stochastique (optimum causal)                  #
-# ---------------------------------------------------------------------- #
 def _interp_row(x, soc_grid, Vnext):
-    """V(x, :) par interpolation lineaire en soc. Vnext de forme (nS, S)."""
+    """Interpolation lineaire en soc de Vnext (forme (nS, S))."""
     if x <= soc_grid[0]:
         return Vnext[0]
     if x >= soc_grid[-1]:
@@ -87,15 +64,10 @@ def _interp_row(x, soc_grid, Vnext):
 
 
 def solve_sdp(env, model, n_soc=61):
-    """Resout l'optimum causal exact du MDP augmente (t, soc, etat_prix).
-
-      V(t, soc, s) = max_a { revenu(soc, a, prix(s,t)) + E_{s'~P[s]} V(t+1, soc', s') }
-
-    Renvoie une politique causale (t, soc, s) -> action et la valeur V0.
-    Complexite : O(H * n_soc * n_actions * S) (+ esperance S). La separation
-    prix/dynamique (soc' independant de s) permet de calculer la transition une
-    seule fois par (soc, a) puis de valoriser sur tous les etats de prix.
-    """
+    """Optimum causal exact par DP stochastique sur l'etat (t, soc, s) :
+        V(t, soc, s) = max_a { revenu + E_{s'~P[s]} V(t+1, soc', s') }.
+    Complexite O(H * n_soc * n_actions * S). Comme soc' ne depend pas de s, on
+    calcule la transition une fois par (soc, a) et on valorise sur tous les s."""
     H, S = env.H, model.S
     soc_grid = np.linspace(0.0, env.capacity, n_soc)
     nS = len(soc_grid)
@@ -104,17 +76,16 @@ def solve_sdp(env, model, n_soc=61):
     pol = np.zeros((H, nS, S), dtype=int)
 
     for t in range(H - 1, -1, -1):
-        price_s = np.array([model.price(s, t) for s in range(S)])   # (S,)
-        Vnext = V[t + 1]                                            # (nS, S)
+        price_s = np.array([model.price(s, t) for s in range(S)])
+        Vnext = V[t + 1]
         for i, soc in enumerate(soc_grid):
-            # soc'/out ne dependent pas de s -> calcul une fois par (i, a)
             q = np.full((env.n_actions, S), -1e18)
             for a in range(env.n_actions):
                 soc_n, out, forced = env.transition(soc, t, a)
-                ev = P @ _interp_row(soc_n, soc_grid, Vnext)        # (S,) esperance
+                ev = P @ _interp_row(soc_n, soc_grid, Vnext)
                 rev = np.array([env.revenue(out, forced, t, p) for p in price_s])
-                q[a] = rev + ev                                     # (S,)
-            best_a = np.argmax(q, axis=0)                           # (S,)
+                q[a] = rev + ev
+            best_a = np.argmax(q, axis=0)
             V[t, i] = q[best_a, np.arange(S)]
             pol[t, i] = best_a
 

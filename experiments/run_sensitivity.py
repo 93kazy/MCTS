@@ -1,13 +1,7 @@
-"""Etude de sensibilite du MCTS (deterministe, donnees synthetiques).
+"""Sensibilite du MCTS au budget de simulations et a la constante c.
 
-Deux questions :
-  1. BUDGET : comment le gain d'arbitrage converge-t-il avec le nombre de
-     simulations par pas ? (caractere "anytime" du MCTS ; role du rollout)
-  2. EXPLORATION : sensibilite a la constante UCT c (a budget fixe).
-
-Protocole : pour chaque configuration, le MCTS est joue en boucle fermee sur
-tout l'horizon, repete sur `n_seeds` graines -> moyenne +/- ecart-type du gain
-d'arbitrage (0 % = sans stockage, 100 % = optimum PD).
+Meme instance que run_demo.py. Pour chaque config, le MCTS est joue sur tout
+l'horizon, repete sur plusieurs graines (gain d'arbitrage moyen +/- ecart-type).
 
 Lancement :  python experiments/run_sensitivity.py [n_seeds]
 """
@@ -28,8 +22,8 @@ from core.mcts import MCTSPlanner
 
 BUDGETS = [30, 100, 300, 1000, 3000]
 C_VALUES = [0.25, 0.5, 1.0, 2.0]
-C_REF = 1.0          # constante utilisee dans l'etude de budget
-BUDGET_REF = 300     # budget utilise dans l'etude de c
+C_REF = 1.0          # c fixe pour l'etude du budget
+BUDGET_REF = 300     # budget fixe pour l'etude de c
 
 
 def arbitrage(profit, base, opt):
@@ -37,7 +31,7 @@ def arbitrage(profit, base, opt):
 
 
 def run_batch(env, n_sim, c, rollout, seeds):
-    """Gain d'arbitrage du MCTS pour chaque graine (boucle fermee complete)."""
+    """Profits du MCTS pour chaque graine."""
     out = []
     for sd in seeds:
         p, _, _ = MCTSPlanner(env, n_simulations=n_sim, c=c,
@@ -50,15 +44,14 @@ def main(n_seeds=5):
     t0 = time.time()
     seeds = list(range(n_seeds))
 
-    # Instance : 1 journee synthetique (H=24), avec canal consommation.
-    prices, production, demand = make_synthetic_data(days=1, seed=1)
+    # meme instance que run_demo.py (48 h) pour des chiffres comparables
+    prices, production, demand = make_synthetic_data(days=2, seed=1)
     env = EnergyStorageEnv(prices, production, demand=demand, p_consume=70.0,
                            capacity=120.0, eta_charge=0.95, eta_discharge=0.95,
                            max_charge=30.0, max_discharge=30.0,
                            soc0=0.0, n_actions=11)
 
     base, _, _ = env.rollout_policy(policy_always_sell(env))
-    _, v0 = dp_optimal(env, n_soc=241)
     dp_policy, _ = dp_optimal(env, n_soc=241)
     opt, _, _ = env.rollout_policy(dp_policy)
     thr = policy_threshold(env)
@@ -68,8 +61,8 @@ def main(n_seeds=5):
 
     rollouts = [("rollout aleatoire", None), ("rollout seuil", thr)]
 
-    # ---- 1) Budget de simulations ------------------------------------------
-    curves = {}   # nom -> (moyennes, ecarts-types)
+    # etude 1 : budget de simulations
+    curves = {}
     print("\n[1] Gain d'arbitrage (%%) vs budget (c = %.2f, %d graines)" % (C_REF, n_seeds))
     print("%-18s" % "budget" + "".join("%14d" % b for b in BUDGETS))
     for name, ro in rollouts:
@@ -83,7 +76,7 @@ def main(n_seeds=5):
         print("%-18s" % name
               + "".join("%7.1f +-%4.1f" % (m, s) for m, s in zip(means, stds)))
 
-    # ---- 2) Constante d'exploration c --------------------------------------
+    # etude 2 : constante d'exploration c
     curves_c = {}
     print("\n[2] Gain d'arbitrage (%%) vs constante c (budget = %d)" % BUDGET_REF)
     print("%-18s" % "c" + "".join("%14.2f" % c for c in C_VALUES))
@@ -100,7 +93,6 @@ def main(n_seeds=5):
 
     print("\nDuree totale : %.0f s" % (time.time() - t0))
 
-    # ---- Figure --------------------------------------------------------------
     try:
         import matplotlib
         matplotlib.use("Agg")

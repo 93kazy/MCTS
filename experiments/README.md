@@ -46,21 +46,67 @@ fins dominent le tout-ou-rien). Figure : `figures/comparaison.png`.
 python experiments\run_sensitivity.py [n_seeds]            :: défaut : 5
 ```
 
-Sur 24 h synthétiques : gain d'arbitrage vs **budget de simulations**
-(30 → 3000, échelle log) et vs **constante d'exploration c** (0,25 → 2), pour
-les deux rollouts. Enseignements (5 graines) :
+Sur la **même instance 48 h** que `run_demo.py` (pour que les chiffres soient
+comparables) : gain d'arbitrage vs **budget de simulations** (30 → 3000,
+échelle log) et vs **constante d'exploration c** (0,25 → 2), pour les deux
+rollouts. Enseignements (5 graines) :
 
-- **Le rollout est le levier décisif** : informé par le seuil, le MCTS dépasse
-  99 % dès ~100 simulations/pas (94 % à 30) ; en rollout aléatoire il reste
-  sous ~30 % même à 3000 simulations — les rollouts aléatoires sous-évaluent
-  systématiquement le stockage (une charge n'a de valeur que si la suite du
-  scénario la décharge au bon moment, ce qu'une continuation aléatoire fait
-  rarement).
-- **c a peu d'effet** une fois le rollout informé (99,3–99,5 % sur toute la
-  plage) ; en rollout aléatoire, le signal est trop bruité pour que c le
-  compense.
+- **Le rollout est le levier décisif** : informé par le seuil, le MCTS est
+  déjà excellent partout (~96 % dès 30 simulations/pas, 97–99 % au-delà), quasi
+  plat juste au-dessus de l'heuristique de départ ; en rollout aléatoire il
+  monte avec le budget (~35 % à 30 → ~61 % à 3000) mais plafonne loin de
+  l'optimum — les continuations aléatoires déchargent rarement l'énergie au bon
+  moment, ce qui biaise les estimations vers le bas.
+- **c a peu d'effet** une fois le rollout informé (~97 % sur toute la plage) ;
+  en rollout aléatoire, le signal est trop bruité pour que c le compense.
+- **Non-monotonie assumée** : avec le rollout informé, plus de simulations peut
+  même faire légèrement *baisser* le résultat (98,6 % à 100, 96,6 % à 1000),
+  car l'arbre s'éloigne du bon défaut du rollout vers ses propres estimations
+  plus bruitées. MCTS ne converge vers l'optimum qu'à très grand budget ; ici
+  il est déjà proche d'un plafond.
 
 Figure : `figures/sensibilite.png` (barres d'erreur = écart-type).
+
+## `run_timing.py` — temps de calcul
+
+```bat
+python experiments\run_timing.py [n_repeat]               :: défaut : 3
+```
+
+Compare le coût d'un pas de planification MCTS (budgets 100 / 300 / 1000) à
+celui de la PD complète, sur l'instance 48 h. Résultat honnête : sur cette
+petite instance déterministe, la **PD est en fait la moins chère** (~0,35 s par
+épisode) ; le MCTS ne la rejoint qu'à ~100 simulations/pas (~0,22 s/épisode) et
+devient plus lent au-delà. L'intérêt du MCTS n'est donc pas la vitesse ici,
+mais sa généralité (pas besoin d'état discrétisé explicite ni de prévision
+parfaite) — voir `run_scaling.py` et la version stochastique.
+
+## `run_scaling.py` — là où MCTS devient plus rapide que la PD
+
+```bat
+python experiments\run_scaling.py [dp_max_B] [n_sim_mcts]   :: défaut : 3 400
+```
+
+Généralise à **B batteries de rendements différents** (état = vecteur des B
+niveaux de charge, espace d'action gardé petit : `2B+1`). Le coût de la PD est
+`O(H · n_soc^B · n_actions)` : le terme `n_soc^B` explose. Le MCTS ne visite que
+les états atteints → coût ~indépendant de B. Résultats mesurés :
+
+| B | états PD | temps PD | temps MCTS | profit PD | profit MCTS |
+|---|---|---|---|---|---|
+| 1 | 21 | 0,01 s | 0,59 s | 51 667 | 51 530 |
+| 2 | 441 | 0,37 s | 0,61 s | 53 318 | 52 942 |
+| 3 | 9 261 | **13,1 s** | 0,65 s | 53 657 | 52 469 |
+| 4 | 194 481 | *infaisable* | 0,68 s | — | 52 297 |
+| 5 | 4 084 101 | *infaisable* | 0,75 s | — | 52 553 |
+| 6 | 85 766 121 | *infaisable* | 0,71 s | — | 52 288 |
+
+À 1 batterie, la PD est ~50× plus rapide ; à **3 batteries, le MCTS passe
+devant** (0,65 s vs 13 s) ; au-delà, la PD est infaisable alors que le MCTS
+tourne toujours au même coût, à ~2 % de l'optimum PD là où on peut encore le
+calculer. C'est la « malédiction de la dimension » en image (figure
+`figures/scaling.png`) : la PD paie pour tout l'espace d'état, le MCTS ne paie
+que ce qu'il explore.
 
 ## `run_demo_stochastic.py` — prix incertains
 
