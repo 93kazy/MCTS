@@ -1,9 +1,9 @@
 """Evaluation Monte Carlo du cas stochastique.
 
-On tire beaucoup de chemins de prix dans le modele de Markov. Chaque politique
-est jouee en boucle fermee (elle ne voit pas le futur) sur les memes chemins ;
+On tire beaucoup de chemins de prix dans le modèle de Markov. Chaque politique
+est jouée en boucle fermée (elle ne voit pas le futur) sur les mêmes chemins,
 le clairvoyant, lui, voit le chemin realise et donne la borne haute. On regarde
-si le MCTS (qui n'utilise qu'un modele generatif) rejoint l'optimum causal (SDP).
+si le MCTS (qui n'utilise qu'un modèle génératif) rejoint l'optimum causal (SDP).
 
 Lancement :  python experiments/run_demo_stochastic.py [n_eval] [n_sim_mcts]
 """

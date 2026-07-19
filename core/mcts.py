@@ -1,8 +1,8 @@
-"""MCTS (UCT) pour le probleme deterministe.
+"""MCTS pour le probleme deterministe.
 
-On l'utilise en horizon glissant : a chaque pas on construit un arbre depuis
-l'etat courant, on joue l'action la plus visitee, puis on recommence au pas
-suivant. Chaque noeud estime la somme des recompenses futures.
+On l'utilise en horizon glissant : à chaque pas on construit un arbre depuis
+l'état courant, on joue l'action la plus visitée, puis on recommence au pas
+suivant. Chaque noeud estime la somme des récompenses futures.
 """
 
 import math
@@ -31,13 +31,12 @@ class MCTSPlanner:
         self.n_simulations = n_simulations
         self.c = c
         self.rng = np.random.default_rng(seed)
-        self.rollout_policy = rollout_policy   # None => rollout aleatoire
+        self.rollout_policy = rollout_policy  
 
     def plan_action(self, t, soc):
         root = _Node(t, soc, self.n_actions)
         for _ in range(self.n_simulations):
             self._simulate(root)
-        # action la plus visitee, egalites departagees par la valeur
         return max(root.children,
                    key=lambda a: (root.children[a].N,
                                   root.edge_r[a]
@@ -45,8 +44,6 @@ class MCTSPlanner:
 
     def _simulate(self, node):
         if node.t >= self.H:
-            # on compte aussi les noeuds terminaux, sinon au dernier pas tous
-            # les enfants restent a N=1 et le choix devient arbitraire
             node.N += 1
             return 0.0
 
@@ -73,8 +70,6 @@ class MCTSPlanner:
         log_n = math.log(node.N)
         q = {a: node.edge_r[a] + ch.W / ch.N for a, ch in node.children.items()}
         q_min, q_max = min(q.values()), max(q.values())
-        # on normalise les valeurs dans [0,1] pour que c garde le meme sens
-        # quelle que soit l'echelle des recompenses
         span = (q_max - q_min) if q_max > q_min else 1.0
 
         best_score, best_a = -1e18, None

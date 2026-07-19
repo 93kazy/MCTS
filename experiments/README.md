@@ -1,4 +1,4 @@
-# `experiments/` — les expériences
+# `experiments/` : les expériences
 
 Tous les scripts se lancent depuis la racine du projet et écrivent leurs figures
 dans `figures/`.
@@ -14,7 +14,7 @@ parce que « tout vendre » fait déjà ~87 % de l'optimum en valeur absolue : c
 métrique isole ce que le stockage apporte vraiment. Le MCTS est moyenné sur
 plusieurs graines (moyenne ± écart-type).
 
-## `run_demo.py` — données synthétiques
+## `run_demo.py` : données synthétiques
 
 ```bat
 python experiments\run_demo.py [n_seeds] [n_simulations]   :: défaut 5 1000
@@ -33,28 +33,18 @@ python experiments\run_demo.py [n_seeds] [n_simulations]   :: défaut 5 1000
 Le script teste aussi le mode `simple3` (les 3 actions du sujet, arbre 3^48) :
 le MCTS y capte ~96 % de l'arbitrage. Figure : `comparaison.png`.
 
-## `run_sensitivity.py` — budget et constante c
+## `run_sensitivity.py` : budget et constante c
 
 ```bat
 python experiments\run_sensitivity.py [n_seeds]            :: défaut 5
 ```
 
 Même instance 48 h. On fait varier le budget de simulations (30 → 3000) et la
-constante `c` (0,25 → 2), pour les deux rollouts. Ce qu'on observe :
-
-- Le rollout compte plus que tout. Informé par le seuil, le MCTS est déjà bon
-  partout (~96 % dès 30 simulations, 97–99 % ensuite). Aléatoire, il monte avec
-  le budget (~35 % → ~61 %) mais reste loin de l'optimum : les continuations
-  aléatoires déchargent rarement l'énergie au bon moment.
-- `c` change peu de chose une fois le rollout informé.
-- Les courbes ne sont pas parfaitement monotones : avec le rollout informé,
-  plus de simulations peut même faire un peu baisser le résultat (98,6 % à 100,
-  96,6 % à 1000), l'arbre s'éloignant du bon défaut du rollout. C'est normal,
-  MCTS n'est exactement optimal qu'à très grand budget.
+constante `c` (0,25 → 2), pour les deux rollouts.
 
 Figure : `sensibilite.png`.
 
-## `run_timing.py` — temps de calcul
+## `run_timing.py` : temps de calcul
 
 ```bat
 python experiments\run_timing.py [n_repeat]               :: défaut 3
@@ -63,9 +53,9 @@ python experiments\run_timing.py [n_repeat]               :: défaut 3
 Compare le coût d'un pas de MCTS à celui de la PD complète (instance 48 h). Sur
 cette petite instance, la PD est en fait la moins chère (~0,35 s par épisode),
 et le MCTS ne la rejoint qu'autour de 100 simulations/pas. L'intérêt du MCTS
-n'est donc pas la vitesse ici — voir `run_scaling.py`.
+n'est donc pas la vitesse ici, voir `run_scaling.py`.
 
-## `run_scaling.py` — quand le MCTS devient plus rapide
+## `run_scaling.py` : quand le MCTS devient plus rapide
 
 ```bat
 python experiments\run_scaling.py [dp_max_B] [n_sim_mcts]   :: défaut 3 400
@@ -84,13 +74,9 @@ visite que les états atteints, donc son coût ne bouge presque pas. Résultats 
 | 5 | 4 084 101 | infaisable | 0,75 s | — | 52 553 |
 | 6 | 85 766 121 | infaisable | 0,71 s | — | 52 288 |
 
-À 1 batterie la PD est ~50× plus rapide ; à 3 batteries le MCTS passe devant
-(0,65 s vs 13 s) ; au-delà la PD n'est plus praticable alors que le MCTS tourne
-toujours, à ~2 % de l'optimum. C'est la malédiction de la dimension : la PD paie
-pour tout l'espace d'état, le MCTS seulement pour ce qu'il explore. Figure :
-`scaling.png`.
+Figure : `scaling.png`.
 
-## `run_demo_stochastic.py` — prix incertains
+## `run_demo_stochastic.py` : prix incertains
 
 ```bat
 python experiments\run_demo_stochastic.py [n_eval] [n_sim_mcts]   :: défaut 40 800
@@ -109,19 +95,10 @@ appariée : 40 chemins communs à toutes les politiques, jouées sans voir le fu
 | MCTS, rollout informé | ~90 % (croît avec le budget) |
 | SDP (optimum causal) | 100 % |
 
-À retenir pour la soutenance :
-
-1. le MCTS approche l'optimum causal (SDP) en n'utilisant qu'un modèle génératif,
-   il ne le bat pas (le SDP est optimal par construction) ;
-2. l'équivalent-certain égale ici le SDP, parce que la re-planification corrige
-   l'incertitude au fil de l'eau (le coût de l'incertitude est ~1 %) ;
-3. l'intérêt du MCTS reste sa généralité : il ne demande qu'un simulateur, là où
-   le SDP exige un état de prix discret explicite et l'équivalent-certain une
-   prévision optimisable.
 
 Figure : `comparaison_stochastique.png`.
 
-## `run_demo_real.py` — vraies données France
+## `run_demo_real.py` : vraies données France
 
 ```bat
 python experiments\run_demo_real.py [debut] [fin] [n_seeds]

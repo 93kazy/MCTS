@@ -1,5 +1,5 @@
-"""Temps de calcul sur l'instance 48 h : cout d'un pas MCTS (par budget) contre
-le cout de la PD complete.
+"""Temps de calcul sur l'instance 48 h : coût d'un pas MCTS (par budget) contre
+le coût de la PD complète.
 
 Lancement :  python experiments/run_timing.py [n_repeat]
 """
@@ -34,18 +34,16 @@ def main(n_repeat=3):
              platform.python_version()))
     print("Instance : H = %d, %d actions\n" % (env.H, env.n_actions))
 
-    # PD : resolution complete
     dp_times = []
     for _ in range(n_repeat):
         t0 = time.perf_counter()
         dp_optimal(env, n_soc=241)
         dp_times.append(time.perf_counter() - t0)
-    print("Programmation dynamique (n_soc=241) : %.3f s (episode complet)"
+    print("Programmation dynamique (n_soc=241) : %.3f s (épisode complet)"
           % np.mean(dp_times))
 
-    # MCTS : temps par pas et par episode
     print("\nMCTS (rollout informe) :")
-    print("%-10s %14s %16s" % ("budget", "s / pas", "s / episode (H pas)"))
+    print("%-10s %14s %16s" % ("budget", "s / pas", "s / épisode (H pas)"))
     for b in BUDGETS:
         planner = MCTSPlanner(env, n_simulations=b, c=1.0,
                               rollout_policy=thr, seed=0)

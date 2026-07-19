@@ -1,10 +1,10 @@
-"""Chargement de vraies donnees France (sans inscription) :
+"""Chargement de vraies données France (sans inscription) :
   - prix day-ahead via energy-charts.info (EPEX SPOT, CC BY 4.0) ;
   - production solaire via ODRE / eCO2mix (RTE).
 
-Les deux series sont alignees sur une grille horaire en UTC (evite les jours de
-23/25 h aux changements d'heure). Les prix negatifs sont gardes tels quels : pour
-un producteur qui doit ecouler sa production, ils donnent de la valeur au stockage.
+Les deux séries sont alignées sur une grille horaire en UTC (évite les jours de
+23/25 h aux changements d'heure). Les prix négatifs sont gardés tels quels : pour
+un producteur qui doit écouler sa production, ils donnent de la valeur au stockage.
 """
 
 import json
@@ -16,7 +16,7 @@ import numpy as np
 
 try:
     from .environment import EnergyStorageEnv
-except ImportError:  # si on lance python core/data_loader.py directement
+except ImportError: 
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -84,9 +84,9 @@ def load_real_series(start, end):
 def build_real_env(start, end, capacity_frac=0.5, power_frac=0.25,
                    eta_charge=0.95, eta_discharge=0.95, n_actions=11,
                    soc0=0.0, demand_frac=0.0, p_consume=90.0):
-    """Construit un EnergyStorageEnv a partir des vraies donnees. Le stockage est
-    dimensionne en fraction du pic solaire. demand_frac > 0 active la consommation
-    interne (demande constante valorisee a p_consume)."""
+    """Construit un EnergyStorageEnv à partir des vraies données. Le stockage est
+    dimensionné en fraction du pic solaire. demand_frac > 0 active la consommation
+    interne (demande constante valorisée à p_consume)."""
     ts, prices, production = load_real_series(start, end)
     peak = float(np.max(production)) if np.max(production) > 0 else 1.0
     demand = np.full(len(prices), demand_frac * peak)

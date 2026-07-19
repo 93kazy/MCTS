@@ -1,8 +1,8 @@
 """Ou le MCTS devient plus rapide que la PD.
 
-On passe a B batteries de rendements differents (impossible de les fusionner) :
-l'etat devient le vecteur des B niveaux de charge. Le cout de la PD croit comme
-n_soc^B (malediction de la dimension), alors que le MCTS ne visite que les etats
+On passe à B batteries de rendements différents (impossible de les fusionner) :
+l'état devient le vecteur des B niveaux de charge. Le coût de la PD croit comme
+n_soc^B, alors que le MCTS ne visite que les états
 atteints et reste ~independant de B. On mesure les deux temps en fonction de B.
 
 Lancement :  python experiments/run_scaling.py [dp_max_B] [n_sim_mcts]
@@ -24,14 +24,14 @@ from core.mcts import MCTSPlanner
 
 
 class MultiStorageEnv:
-    """B batteries de rendements differents, production et prix communs.
+    """B batteries de rendements différents, production et prix communs.
 
     Actions (n_actions = 2B+1, croit lineairement en B) :
       0       : tout vendre ;
       2b+1    : charger la batterie b au max ;
       2b+2    : decharger la batterie b au max.
-    Les rendements distincts empechent de fusionner les batteries : l'etat garde
-    ses B dimensions, ce qui fait exploser le cout de la PD.
+    Les rendements distincts empechent de fusionner les batteries : l'état garde
+    ses B dimensions, ce qui fait exploser le coût de la PD.
     """
 
     def __init__(self, prices, production, B=1, capacity=60.0, seed=0):
@@ -39,7 +39,7 @@ class MultiStorageEnv:
         self.production = np.asarray(production, dtype=float)
         self.H = len(self.prices)
         self.B = B
-        base = np.linspace(0.90, 0.98, B)   # rendements echelonnes, tous distincts
+        base = np.linspace(0.90, 0.98, B)
         self.eta_c = base.copy()
         self.eta_d = base[::-1].copy()
         self.capacity = np.full(B, float(capacity))
@@ -56,12 +56,12 @@ class MultiStorageEnv:
             sold = prod
         else:
             b = (a - 1) // 2
-            if (a - 1) % 2 == 0:   # charger b
+            if (a - 1) % 2 == 0:
                 room = (self.capacity[b] - soc[b]) / self.eta_c[b]
                 c = max(min(self.max_rate[b], prod, room), 0.0)
                 soc[b] += self.eta_c[b] * c
                 sold = prod - c
-            else:                  # decharger b
+            else:
                 d = max(min(self.max_rate[b], soc[b]), 0.0)
                 soc[b] -= d
                 sold = prod + self.eta_d[b] * d
@@ -69,7 +69,7 @@ class MultiStorageEnv:
         return soc, sold * price
 
     def informed_rollout(self):
-        """Rollout : au-dessus du prix median on decharge la batterie la plus
+        """Rollout : au-dessus du prix médian on décharge la batterie la plus
         pleine, en dessous on charge la plus vide."""
         median = float(np.median(self.prices))
 
@@ -86,7 +86,7 @@ class MultiStorageEnv:
 
 def dp_multi(env, n_soc=21):
     """PD sur une grille n_soc par batterie (plus proche voisin).
-    Cout O(H * n_soc^B * n_actions). Renvoie (V0, temps en secondes)."""
+    Coût O(H * n_soc^B * n_actions). Renvoie (V0, temps en secondes)."""
     B, H = env.B, env.H
     grids = [np.linspace(0.0, env.capacity[b], n_soc) for b in range(B)]
     shape = (n_soc,) * B
@@ -137,7 +137,7 @@ def main(dp_max_B=3, n_sim=400, n_soc=21, mcts_max_B=6, n_seeds=3):
           % (len(prices), n_soc, n_sim, n_seeds))
 
     header = ("%-4s %10s %14s %14s %12s %10s"
-              % ("B", "etats PD", "temps PD (s)", "temps MCTS (s)",
+              % ("B", "états PD", "temps PD (s)", "temps MCTS (s)",
                  "profit PD", "profit MCTS"))
     print(header)
     print("-" * len(header))
@@ -147,13 +147,11 @@ def main(dp_max_B=3, n_sim=400, n_soc=21, mcts_max_B=6, n_seeds=3):
         env = MultiStorageEnv(prices, production, B=B)
         n_states = n_soc ** B
 
-        # PD tant que c'est faisable
         if B <= dp_max_B:
             v0_dp, t_dp = dp_multi(env, n_soc=n_soc)
         else:
             v0_dp, t_dp = None, None
 
-        # MCTS moyenne sur les graines
         rollout = env.informed_rollout()
         prof, t_mc = [], []
         for sd in range(n_seeds):
@@ -170,7 +168,7 @@ def main(dp_max_B=3, n_sim=400, n_soc=21, mcts_max_B=6, n_seeds=3):
               % (B, n_states, dp_t_str, t_mcts, dp_v_str, v_mc))
         rows.append((B, n_states, t_dp, t_mcts, v0_dp, v_mc))
 
-    # figure : temps vs nombre de batteries (echelle log)
+    # figure : temps vs nombre de batteries (échelle log)
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -186,9 +184,9 @@ def main(dp_max_B=3, n_sim=400, n_soc=21, mcts_max_B=6, n_seeds=3):
         ax.plot(Bs, mc_t, "s-", color="tab:blue",
                 label="MCTS (%d sim/pas)" % n_sim)
         ax.set_yscale("log")
-        ax.set_xlabel("Nombre de batteries B (dimension de l'etat)")
-        ax.set_ylabel("Temps de calcul par episode (s, log)")
-        ax.set_title("Cout PD vs MCTS quand l'etat grandit")
+        ax.set_xlabel("Nombre de batteries B (dimension de l'état)")
+        ax.set_ylabel("Temps de calcul par épisode (s, log)")
+        ax.set_title("Coût PD vs MCTS quand l'état grandit")
         ax.set_xticks(Bs)
         ax.grid(True, which="both", ls=":", alpha=0.4)
         ax.legend()
@@ -196,9 +194,9 @@ def main(dp_max_B=3, n_sim=400, n_soc=21, mcts_max_B=6, n_seeds=3):
         FIGDIR.mkdir(exist_ok=True)
         out = FIGDIR / "scaling.png"
         fig.savefig(out, dpi=120)
-        print("\nFigure enregistree : %s" % out)
+        print("\nFigure enregistrée : %s" % out)
     except Exception as exc:
-        print("\n(Figure non generee : %s)" % exc)
+        print("\n(Figure non générée : %s)" % exc)
 
 
 if __name__ == "__main__":

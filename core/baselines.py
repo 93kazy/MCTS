@@ -1,4 +1,4 @@
-"""Strategies de reference : quelques heuristiques simples et l'optimum exact
+"""Stratégies de référence : quelques heuristiques simples et l'optimum exact
 par programmation dynamique (qui sert de plafond pour juger le MCTS)."""
 
 import numpy as np
@@ -19,7 +19,7 @@ def policy_always_sell(env):
 
 
 def policy_threshold(env, threshold=None):
-    """Vendre au max si le prix depasse le seuil (mediane par defaut),
+    """Vendre au max si le prix dépasse le seuil (mediane par defaut),
     sinon stocker au max. L'arbitrage classique buy low / sell high."""
     if threshold is None:
         threshold = float(np.median(env.prices))

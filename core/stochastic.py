@@ -1,7 +1,7 @@
-"""Strategies de reference en stochastique :
-  - clairvoyant   : DP sur le chemin de prix reel (voit le futur, borne haute) ;
+"""Stratégies de référence en stochastique :
+  - clairvoyant   : DP sur le chemin de prix réel (voit le futur, borne haute) ;
   - SDP           : optimum causal exact (DP sur (t, soc, etat_prix)) ;
-  - equiv.-certain: a chaque pas, on re-optimise en deterministe sur la prevision
+  - equiv.-certain: à chaque pas, on re-optimise en deterministe sur la prévision
                     moyenne des prix (MPC) et on joue la 1re action.
 """
 
@@ -9,7 +9,7 @@ import numpy as np
 
 
 def solve_det_dp(env, prices, t0=0, n_soc=61, soc_grid=None):
-    """DP deterministe pour une serie de prix donnee."""
+    """DP déterministe pour une série de prix donnée."""
     H = env.H
     if soc_grid is None:
         soc_grid = np.linspace(0.0, env.capacity, n_soc)
@@ -36,8 +36,8 @@ def clairvoyant_value(env, realized_prices, n_soc=61):
 
 
 def make_ce_mpc_policy(env, model, n_soc=51):
-    """Politique equivalent-certain : a chaque pas, DP sur la prevision moyenne
-    de t a H-1, on renvoie l'action optimale en t."""
+    """Politique equivalent-certain : à chaque pas, DP sur la prévision moyenne
+    de t à H-1, on renvoie l'action optimale en t."""
     soc_grid = np.linspace(0.0, env.capacity, n_soc)
 
     def policy(t, soc, s):
@@ -53,7 +53,7 @@ def make_ce_mpc_policy(env, model, n_soc=51):
 
 
 def _interp_row(x, soc_grid, Vnext):
-    """Interpolation lineaire en soc de Vnext (forme (nS, S))."""
+    """Interpolation linéaire en soc de Vnext (forme (nS, S))."""
     if x <= soc_grid[0]:
         return Vnext[0]
     if x >= soc_grid[-1]:
@@ -66,7 +66,7 @@ def _interp_row(x, soc_grid, Vnext):
 def solve_sdp(env, model, n_soc=61):
     """Optimum causal exact par DP stochastique sur l'etat (t, soc, s) :
         V(t, soc, s) = max_a { revenu + E_{s'~P[s]} V(t+1, soc', s') }.
-    Complexite O(H * n_soc * n_actions * S). Comme soc' ne depend pas de s, on
+    Complexité O(H * n_soc * n_actions * S). Comme soc' ne dépend pas de s, on
     calcule la transition une fois par (soc, a) et on valorise sur tous les s."""
     H, S = env.H, model.S
     soc_grid = np.linspace(0.0, env.capacity, n_soc)

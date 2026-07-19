@@ -1,7 +1,7 @@
-"""Sensibilite du MCTS au budget de simulations et a la constante c.
+"""Sensibilité du MCTS au budget de simulations et à la constante c.
 
-Meme instance que run_demo.py. Pour chaque config, le MCTS est joue sur tout
-l'horizon, repete sur plusieurs graines (gain d'arbitrage moyen +/- ecart-type).
+Même instance que run_demo.py. Pour chaque config, le MCTS est joué sur tout
+l'horizon, répété sur plusieurs graines (gain d'arbitrage moyen +/- écart-type).
 
 Lancement :  python experiments/run_sensitivity.py [n_seeds]
 """
@@ -22,8 +22,8 @@ from core.mcts import MCTSPlanner
 
 BUDGETS = [30, 100, 300, 1000, 3000]
 C_VALUES = [0.25, 0.5, 1.0, 2.0]
-C_REF = 1.0          # c fixe pour l'etude du budget
-BUDGET_REF = 300     # budget fixe pour l'etude de c
+C_REF = 1.0        
+BUDGET_REF = 300     
 
 
 def arbitrage(profit, base, opt):
@@ -43,8 +43,6 @@ def run_batch(env, n_sim, c, rollout, seeds):
 def main(n_seeds=5):
     t0 = time.time()
     seeds = list(range(n_seeds))
-
-    # meme instance que run_demo.py (48 h) pour des chiffres comparables
     prices, production, demand = make_synthetic_data(days=2, seed=1)
     env = EnergyStorageEnv(prices, production, demand=demand, p_consume=70.0,
                            capacity=120.0, eta_charge=0.95, eta_discharge=0.95,
@@ -61,7 +59,7 @@ def main(n_seeds=5):
 
     rollouts = [("rollout aleatoire", None), ("rollout seuil", thr)]
 
-    # etude 1 : budget de simulations
+    # étude 1 : budget de simulations
     curves = {}
     print("\n[1] Gain d'arbitrage (%%) vs budget (c = %.2f, %d graines)" % (C_REF, n_seeds))
     print("%-18s" % "budget" + "".join("%14d" % b for b in BUDGETS))
@@ -76,7 +74,7 @@ def main(n_seeds=5):
         print("%-18s" % name
               + "".join("%7.1f +-%4.1f" % (m, s) for m, s in zip(means, stds)))
 
-    # etude 2 : constante d'exploration c
+    # étude 2 : constante d'exploration c
     curves_c = {}
     print("\n[2] Gain d'arbitrage (%%) vs constante c (budget = %d)" % BUDGET_REF)
     print("%-18s" % "c" + "".join("%14.2f" % c for c in C_VALUES))
@@ -115,16 +113,16 @@ def main(n_seeds=5):
             ax[1].errorbar(C_VALUES, m, yerr=s, marker="o", capsize=3, label="MCTS " + name)
         ax[1].axhline(100, color="green", ls="--", lw=1)
         ax[1].set_xlabel("Constante d'exploration c")
-        ax[1].set_title("Sensibilite a c (budget = %d)" % BUDGET_REF)
+        ax[1].set_title("Sensibilité à c (budget = %d)" % BUDGET_REF)
         ax[1].legend(fontsize=8)
 
         fig.tight_layout()
         FIGDIR.mkdir(exist_ok=True)
         out = FIGDIR / "sensibilite.png"
         fig.savefig(out, dpi=120)
-        print("Figure enregistree : %s" % out)
+        print("Figure enregistrée : %s" % out)
     except Exception as exc:
-        print("(Figure non generee : %s)" % exc)
+        print("(Figure non générée : %s)" % exc)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-"""Comparaison heuristiques / PD / MCTS sur donnees synthetiques.
+"""Comparaison heuristiques / PD / MCTS sur données synthétiques.
 
-Metrique : le gain d'arbitrage = (profit - sans_stockage) / (optimum - sans_stockage),
+Métrique : le gain d'arbitrage = (profit - sans_stockage) / (optimum - sans_stockage),
 qui vaut 0 % sans stockage et 100 % a l'optimum. Le MCTS est moyenne sur plusieurs
 graines. On teste aussi le mode "simple3" (les 3 actions du sujet).
 

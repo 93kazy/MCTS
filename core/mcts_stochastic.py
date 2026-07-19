@@ -1,9 +1,9 @@
 """MCTS pour le cas stochastique.
 
-Meme idee que la version deterministe, mais apres chaque action on tire l'etat
-de prix suivant dans le modele de Markov (au lieu de le rejouer). On n'utilise
+Même idée que la version déterministe, mais apres chaque action on tire l'état
+de prix suivant dans le modèle de Markov (au lieu de le rejouer). On n'utilise
 que sample_next : pas besoin de la matrice de transition. La dynamique du
-stockage, elle, ne depend pas du prix, donc soc' est deterministe.
+stockage, elle, ne dépend pas du prix, donc soc' est déterministe.
 """
 
 import math
@@ -18,8 +18,8 @@ class _Node:
         self.soc = soc
         self.s = s
         self.untried = list(range(n_actions))
-        self.astats = {}                 # a -> [N_a, W_a]
-        self.kids = {}                   # (a, s') -> _Node
+        self.astats = {}                 
+        self.kids = {}                   
         self.N = 0
 
 
@@ -61,7 +61,7 @@ class StochasticMCTSPlanner:
         else:
             a = self._uct_select(node)
             soc_n, r = self._step(node.soc, node.t, a, node.s)
-            s2 = self.model.sample_next(node.s, self.rng)   # on re-echantillonne
+            s2 = self.model.sample_next(node.s, self.rng) 
             child = node.kids.get((a, s2))
             if child is None:
                 child = _Node(node.t + 1, soc_n, s2, self.n_actions)
@@ -101,7 +101,7 @@ class StochasticMCTSPlanner:
         return g
 
     def run_on_path(self, state_path):
-        """Joue le MCTS en boucle fermee sur un chemin de prix reel (le
+        """Joue le MCTS en boucle fermée sur un chemin de prix réel (le
         planificateur ne voit pas le futur). Renvoie le profit total."""
         soc = self.env.soc0
         total = 0.0

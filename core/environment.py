@@ -1,7 +1,7 @@
 """Environnement (MDP) de la centrale avec stockage.
 
-A chaque heure la centrale produit de l'energie et peut la vendre au prix spot,
-la stocker dans la batterie, ou la consommer en interne (valorisee au prix
+A chaque heure la centrale produit de l'énergie et peut la vendre au prix spot,
+la stocker dans la batterie, ou la consommer en interne (valorisée au prix
 d'evitement p_consume). Etat = (t, soc). Pas d'achat sur le marche : le stockage
 sert juste a decaler dans le temps l'usage de sa propre production.
 
@@ -10,7 +10,7 @@ Deux modes d'action :
   - "grid"    : un debit de stockage u parmi n_actions valeurs. Le partage
                 vente/consommation du reste est fait par le prix (on consomme si
                 p_consume > prix), ce qui laisse le stockage comme seule vraie
-                decision. Arbre n_actions^H, bien plus grand.
+                décision. Arbre n_actions^H, bien plus grand.
 """
 
 import numpy as np
@@ -49,7 +49,6 @@ class EnergyStorageEnv:
 
         self.action_mode = action_mode
         if action_mode == "grid":
-            # grille de debits symetrique autour de 0 (n_actions impair -> 0 inclus)
             k = max(1, (n_actions - 1) // 2)
             charge = np.linspace(0.0, self.max_charge, k + 1)[1:]
             discharge = -np.linspace(0.0, self.max_discharge, k + 1)[1:]
@@ -65,8 +64,8 @@ class EnergyStorageEnv:
         self._soc = self.soc0
 
     def transition(self, soc, t, action_index):
-        """Dynamique sans le prix : renvoie (soc_suivant, energie a ecouler,
-        conso imposee). forced=None en mode grid (le partage vente/conso est
+        """Dynamique sans le prix : renvoie (soc_suivant, énergie à ecouler,
+        conso imposée). forced=None en mode grid (le partage vente/conso est
         differe a revenue), une valeur en mode simple3."""
         prod = self.production[t]
 
@@ -83,7 +82,7 @@ class EnergyStorageEnv:
                 soc_next = soc + self.eta_charge * c
                 out = prod - c
                 forced = 0.0
-            else:  # CONSOMMER : on sert la demande d'abord
+            else: 
                 soc_next = soc
                 out = prod
                 forced = min(self.demand[t], prod)
@@ -91,12 +90,12 @@ class EnergyStorageEnv:
             return soc_next, out, forced
 
         u = self.actions[action_index]
-        if u >= 0.0:  # charge
+        if u >= 0.0:
             c = min(u, prod, (self.capacity - soc) / self.eta_charge)
             c = max(c, 0.0)
             soc_next = soc + self.eta_charge * c
             out = prod - c
-        else:  # decharge
+        else:
             d = min(-u, soc)
             d = max(d, 0.0)
             soc_next = soc - d
@@ -105,7 +104,7 @@ class EnergyStorageEnv:
         return soc_next, out, None
 
     def revenue(self, out, forced, t, price):
-        """Recompense de l'energie `out` au prix donne. En mode grid, on consomme
+        """Récompense de l'énergie `out` au prix donné. En mode grid, on consomme
         avant de vendre uniquement si c'est plus rentable (p_consume > prix)."""
         if forced is None:
             if self.p_consume[t] > price:
@@ -117,7 +116,7 @@ class EnergyStorageEnv:
         return consumed * self.p_consume[t] + (out - consumed) * price
 
     def apply(self, soc, t, action_index):
-        """Transition + revenu aux prix reels de l'environnement."""
+        """Transition + revenu aux prix réels de l'environnement."""
         soc_next, out, forced = self.transition(soc, t, action_index)
         return soc_next, self.revenue(out, forced, t, self.prices[t])
 
@@ -150,7 +149,7 @@ class EnergyStorageEnv:
 
 
 def make_synthetic_data(days=2, seed=0):
-    """Profil journalier synthetique : prix (creux a midi, pics matin/soir),
+    """Profil journalier synthétique : prix (creux à midi, pics matin/soir),
     production solaire en cloche, demande interne avec une bosse le soir.
     Renvoie (prix, production, demande)."""
     rng = np.random.default_rng(seed)

@@ -1,8 +1,8 @@
 """Modele de prix stochastique.
 
 prix[t] = max(mu[t] + e[t], plancher), ou mu[t] est le motif journalier connu
-et e[t] une deviation aleatoire qui revient vers 0 (chaine de Markov, avec de
-temps en temps un pic). Le modele donne a la fois la matrice de transition
+et e[t] une déviation aléatoire qui revient vers 0 (chaine de Markov, avec de
+temps en temps un pic). Le modèle donne a la fois la matrice de transition
 (pour le SDP) et de quoi echantillonner des scenarios (pour le MCTS)."""
 
 import numpy as np
@@ -28,7 +28,6 @@ class MarkovPriceModel:
         self.mu = np.asarray(mu, dtype=float)
         self.H = len(self.mu)
         if dev_states is None:
-            # grille asymetrique : la queue haute represente les pics de prix
             dev_states = np.array([-20, -12, -6, -2, 0, 2, 6, 12, 25, 45], float)
         self.dev = np.asarray(dev_states, dtype=float)
         self.S = len(self.dev)
@@ -40,8 +39,6 @@ class MarkovPriceModel:
         self.start_state = int(np.argmin(np.abs(self.dev)))
 
     def _build_transition(self, rho, sigma, spike_prob):
-        # gaussienne centree sur rho*e (retour a la moyenne) + un peu de masse
-        # sur l'etat de pic
         P = np.zeros((self.S, self.S))
         for i, e in enumerate(self.dev):
             target = rho * e
@@ -60,7 +57,6 @@ class MarkovPriceModel:
         return np.array([self.price(s, t) for t, s in enumerate(state_path)])
 
     def sample_next(self, s, rng):
-        # tirage par inversion de la cdf (plus rapide que rng.choice)
         return int(np.searchsorted(self._cdf[s], rng.random()))
 
     def sample_path(self, rng):
@@ -72,8 +68,8 @@ class MarkovPriceModel:
         return np.array(path)
 
     def expected_future_devs(self, s, n):
-        """Esperance de la deviation sur les n prochains pas (offset 0 = pas
-        courant). Sert a l'equivalent-certain."""
+        """Espérance de la déviation sur les n prochains pas (offset 0 = pas
+        courant). Sert à l'equivalent-certain."""
         dist = np.zeros(self.S)
         dist[s] = 1.0
         out = []

@@ -1,6 +1,6 @@
-# Projet MCTS — gestion énergétique d'une centrale avec stockage
+# Projet MCTS : gestion énergétique d'une centrale avec stockage
 
-Projet M2. On applique l'algorithme Monte Carlo Tree Search (MCTS) à un problème
+On applique l'algorithme Monte Carlo Tree Search (MCTS) à un problème
 de décision séquentielle : à chaque heure, une centrale doit vendre, stocker ou
 consommer l'électricité qu'elle produit, pour maximiser son profit sur la
 journée. Les prix viennent du marché day-ahead français (EPEX SPOT).
@@ -8,7 +8,7 @@ journée. Les prix viennent du marché day-ahead français (EPEX SPOT).
 L'intérêt du MCTS vient du nombre de séquences de décisions possibles : avec les
 3 actions du sujet on a déjà 3^24 ≈ 2,8 × 10¹¹ séquences pour une journée, et
 avec la grille de débits qu'on utilise (11 actions) 11^24 ≈ 10²⁵. On ne peut pas
-tout énumérer ; le MCTS explore seulement les branches intéressantes.
+tout énumérer, le MCTS explore seulement les branches intéressantes.
 
 ## Structure
 
@@ -25,7 +25,6 @@ Projet_MCTS/
 ├── experiments/             # scripts qui produisent les résultats et figures
 ├── tests/                   # tests unitaires
 ├── figures/                 # figures générées
-├── report/                  # rapport LaTeX
 ├── requirements.txt
 └── README.md
 ```
@@ -70,8 +69,7 @@ exactement à l'énoncé.
 - Production solaire France : [ODRÉ / éCO2mix](https://odre.opendatasoft.com) (RTE).
 
 Les séries sont téléchargées à la volée, rien n'est stocké dans le dépôt. Les
-prix EPEX restent propriété d'EPEX SPOT SE (usage académique, avec mention de la
-source).
+prix EPEX restent propriété d'EPEX SPOT SE.
 
 ## Principaux résultats
 
